@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.fastser</groupId>
+    <artifactId>fastser-dal-root</artifactId>
+    <version>1.0.2</version>
+  </parent>
+  
+  <artifactId>fastser-dal-mybatis</artifactId>
+  
+  
+  <name>fastser-dal-mybatis</name>
+  <url>http://maven.apache.org</url>
+  
+  <dependencies>
+  
+        <dependency>
+            <groupId>org.fastser</groupId>
+            <artifactId>fastser-dal</artifactId>
+            <version>1.0.1</version>
+        </dependency>
+        
+
+        
+        <!-- =================================================== -->
+        <!-- mybatis -->
+        <!-- =================================================== -->
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis</artifactId>
+            <version>3.2.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis-spring</artifactId>
+            <version>1.1.1</version>
+        </dependency>
+
+        <!-- ==================== -->
+        <!-- 测试 -->
+        <!-- ==================== -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+        
+        
+    </dependencies>
+  
+</project>

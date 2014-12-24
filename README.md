@@ -1,13 +1,13 @@
 fastser-dal
 ===========
 
-基于mybatis、spring jdbc、hibernate的通用数据该问层，支持基于datasource的读写分离和主备自动切换
+本着不重复造轮子的原则，基于mybatis、spring jdbc、hibernate等ORM的通用数据该问层，支持基于datasource的读写分离、主备自动切换和故障转移，支持简单的负载均衡。
 
 # 功能概述
 
-* 基于mybatis、spring jdbc、hibernate等各大orm框架实现通用dal层功能，并与已有项目完全兼容。
+* 基于mybatis、spring jdbc、hibernate等各大orm框架实现通用dal层功能，并可以与已有项目完全兼容。
 * 实现dal层cache
-* 实现多数据源的读写分离和主备功能
+* 实现基于多数据源(datasource)的读写分离、主备切换、故障转移、恢复检测和负载均衡
 * 使用该组件必须遵循以下规则：默认字段名称与数据库表字段一致，每张表有名称为id的唯一标识字段
 
 
@@ -42,13 +42,15 @@ fastser-dal
 
 ### 与spring集成
 
+动态数据源可以自动处理故障转移和恢复检测，读写分离时多个读库采用随机获取。缓存可以自定义实现，可以统一开启或关闭，方便在开发环境使用。
+
 		<!-- 缓存默认实现，可以自定义实现 -->
         <bean id="cacheManager" class="org.fastser.dal.cache.support.SimpleCacheManager"></bean>
         <!-- 配置缓存 -->
 		<bean id="cacheManager" class="org.fastser.dal.cache.support.SimpleCacheManager">
 			<property name="cache" ref="dalRedisCache"></property>
 		</bean>
-    <!-- 配置数据源解析器 -->
+    	<!-- 配置数据源解析器 -->
     	<bean id="resolveDatabase" class="org.fastser.dal.descriptor.db.impl.SimpleResolveDatabase">
         	<property name="dataSource" ref="dataSource" />
         	<property name="cacheManager" ref="cacheManager" />
@@ -89,7 +91,20 @@ fastser-dal
 		<!-- hibernate实现配置 -->
         待实现
 
-
+		<!--可选，动态数据源配置 -->
+		<bean id="dynamicDataSource" class="org.fastser.dal.datasource.DynamicDataSource">
+        	<!-- 从数据库配置，用于读操作，目前为随机取一个 -->
+			<property name="slaveDataSources">
+				<map key-type="java.lang.String">
+					<entry key="readDataSourceOne" value-ref="dataSource3"/>
+					<entry key="readDataSourceTwo" value-ref="dataSource4"/>
+				</map>
+			</property>
+            <!-- 主数据库配置 -->
+			<property name="masterDataSource" ref="dataSource1" />
+            <!-- 备数据库配置 -->
+			<property name="standbyDataSource" ref="dataSource2" />
+		</bean>
 ## 使用示例
 
 ### 1 现有方法
