@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>cn.uncode</groupId>
+    <artifactId>uncode-dal-root</artifactId>
+    <version>1.0.3</version>
+  </parent>
+  
+  <artifactId>uncode-dal-mybatis</artifactId>
+  <packaging>jar</packaging>
+  
+  
+  <name>uncode-dal-mybatis</name>
+  <url>http://maven.apache.org</url>
+  
+  <dependencies>
+  
+        <dependency>
+            <groupId>cn.uncode</groupId>
+            <artifactId>uncode-dal</artifactId>
+            <version>1.0.3</version>
+        </dependency>
+        
+
+        
+        <!-- =================================================== -->
+        <!-- mybatis -->
+        <!-- =================================================== -->
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis</artifactId>
+            <version>3.2.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis-spring</artifactId>
+            <version>1.1.1</version>
+        </dependency>
+
+        <!-- ==================== -->
+        <!-- 测试 -->
+        <!-- ==================== -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+        
+        
+    </dependencies>
+  
+</project>

@@ -1,10 +1,8 @@
 uncode-dal
 ===========
 
-本着不重复造轮子的原则，基于mybatis、spring jdbc、hibernate等ORM的通用数据访问层，支持基于datasource的读写分离、主备自动切换和故障转移，支持简单的负载均衡。 
+本着不重复造轮子的原则，基于mybatis、spring jdbc、hibernate等ORM的通用数据访问层，支持基于datasource的读写分离、主备自动切换和故障转移，支持简单的负载均衡。
 
-
-源码地址：http:http://git.oschina.net/uncode/uncode-dal-all
 
 [TOC]
 
@@ -178,7 +176,31 @@ jar文件下载地址：http://www.uncode.cn/uncode-dal/uncode-dal-all-1.0.3.zip
             <property name="useCache" value="false" />
     	</bean>
 
+## 与原生框架配合使用
 
+该组件只处理所有单表操作，对于连表等复杂操作可以使用原生框架，以达到在满足所有功能的前提下提高开发效率，降低成本。
+
+### 1 Spring jdbc
+
+JdbcTemplate jdbcTemplate = (JdbcTemplate)baseDAL.getTemplate();
+
+### 2 Mybatis
+
+    <!-- 将原来的SqlSessionFactory配置修改如下 -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        	<property name="dataSource" ref="dataSource" />
+         	<property name="configLocation" value="classpath:mybatis.xml"></property>
+         	<property name="mapperLocations" value="classpath:/cn/uncode/mapper/*Mapper.xml" />
+    </bean> 
+
+	<!-- 扫描注入Dao -->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+	  <property name="basePackage" value="cn.uncode.mapper" />
+	</bean>
+	
+### 3 MongoDB
+
+MongoDB mongoDB = (MongoDB)baseDAL.getTemplate();
 
 ## API
 
@@ -297,6 +319,31 @@ database数据名称，tableName表名称
         andColumnNotLike(String column, Object value)
         andColumnBetween(String column, Object value1, Object value2)
         andColumnNotBetween(String column, Object value1, Object value2)
+
+### 10 QueryResult方法
+
+		//单条数据以map获取
+		Map<String, Object> get()
+		  //单条数据以map获取,并使用别名替换原来字段
+        Map<String, Object> getWithAliasName(Map<String, String> aliasName)
+        //单条数据以map获取,并隐藏不需要显示的字段
+        Map<String, Object> get(List<String> hiddenFields)
+        //单条数据以map获取,隐藏不需要显示的字段,使用别名替换原来字段
+        Map<String, Object> getWithAliasName(List<String> hiddenFields, Map<String, String> aliasName)
+        //多条数据以list获取
+        List<Map<String, Object>> getList()
+        //多条数据以list获取,并隐藏不需要显示的字段
+        List<Map<String, Object>> getList(List<String> hiddenFields)
+        //多条数据以list获取,并使用别名替换原来字段
+        List<Map<String, Object>> getList(Map<String, String> aliasName)
+        //多条数据以list获取,隐藏不需要显示的字段,使用别名替换原来字段
+        List<Map<String, Object>> getList(List<String> hiddenFields, Map<String, String> aliasName)
+        //单条数据转为对象
+        <T> T as(Class<T> beanClass)
+        //多条数据转为对象
+        <T> List<T> asList(Class<T> beanClass)
+        //获取分页信息
+        Map<String, Object> getPage()
 
 
 ## 使用示例
@@ -508,6 +555,25 @@ database数据名称，tableName表名称
 
 			Map<String, Object> user = new HashMap<String, Object>();
         	user.put("email", "ywj_316@qq.com");
+            user.put("id", 1);
+            //第一个参数为表名，user中必须包括所有主键字段
+        	int result = baseDAL.updateByPrimaryKey("user", user);
+        	
+	* 示例3
+
+			Map<String, Object> user = new HashMap<String, Object>();
+			//设置为null
+        	user.put("email", null);
+            user.put("id", 1);
+            //第一个参数为表名，user中必须包括所有主键字段
+        	int result = baseDAL.updateByPrimaryKey("user", user);
+			
+	* 示例4
+
+			Map<String, Object> user = new HashMap<String, Object>();
+			//设置函数
+        	user.put("email", "=concat('11','22')");
+			user.put("age", "=age+1");
             user.put("id", 1);
             //第一个参数为表名，user中必须包括所有主键字段
         	int result = baseDAL.updateByPrimaryKey("user", user);

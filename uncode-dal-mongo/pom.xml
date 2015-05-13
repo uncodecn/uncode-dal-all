@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>cn.uncode</groupId>
+    <artifactId>uncode-dal-root</artifactId>
+    <version>1.0.3</version>
+  </parent>
+  
+  <artifactId>uncode-dal-mongo</artifactId>
+  
+  <name>uncode-dal-mongo</name>
+  <url>http://maven.apache.org</url>
+  
+  
+  <dependencies>
+  
+  		<dependency>
+            <groupId>cn.uncode</groupId>
+            <artifactId>uncode-dal</artifactId>
+            <version>1.0.3</version>
+        </dependency>
+        
+        <!-- =================================================== -->
+        <!-- mongo -->
+        <!-- =================================================== -->
+  		<dependency>
+          <groupId>org.mongodb</groupId>
+          <artifactId>mongo-java-driver</artifactId>
+          <version>2.10.1</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.jongo</groupId>
+            <artifactId>jongo</artifactId>
+            <version>1.0</version>
+        </dependency>
+        
+        <!-- ==================== -->
+        <!-- 测试 -->
+        <!-- ==================== -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+
+  </dependencies>
+</project>
