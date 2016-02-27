@@ -3,6 +3,9 @@ package cn.uncode.dal.mybatis;
 import java.util.List;
 import java.util.Map;
 
+import org.mybatis.spring.SqlSessionTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import cn.uncode.dal.core.AbstractBaseDAL;
 import cn.uncode.dal.core.BaseDAL;
 import cn.uncode.dal.descriptor.Table;
@@ -10,6 +13,8 @@ import cn.uncode.dal.descriptor.Table;
 public class MybatisDAL  extends AbstractBaseDAL implements BaseDAL {
 
     private CommonMapper commonMapper;
+    
+    private SqlSessionTemplate sqlSessionTemplate;
 
     public void setCommonMapper(CommonMapper commonMapper) {
         this.commonMapper = commonMapper;
@@ -32,8 +37,18 @@ public class MybatisDAL  extends AbstractBaseDAL implements BaseDAL {
 	}
 
 	@Override
-	public int _insert(Table table) {
-		return commonMapper.insert(table);
+	public long _insert(Table table) {
+	    boolean hasPrimaryKey = true;
+	    for(String field : table.getPrimaryKey().getFields()){
+	        if(hasPrimaryKey && !table.getParams().containsKey(field)){
+	            hasPrimaryKey = false;
+	        }
+	    }
+	    if(hasPrimaryKey){
+	        return commonMapper.insertWithId(table);
+	    }else{
+	        return commonMapper.insert(table);
+	    }
 	}
 
 	@Override
@@ -64,9 +79,10 @@ public class MybatisDAL  extends AbstractBaseDAL implements BaseDAL {
 
 
 	@Override
-	public Object getTemplate() {
+	public JdbcTemplate getTemplate() {
 		return null;
 	}
+
 
 
 	

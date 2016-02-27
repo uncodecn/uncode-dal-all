@@ -47,9 +47,9 @@
     
     <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">  
 		<property name="driverClassName" value="com.mysql.jdbc.Driver"></property>  
-		<property name="url" value="jdbc:mysql://192.168.1.11:3306/ksudi_new?characterEncoding=utf-8"></property>  
+		<property name="url" value="jdbc:mysql://192.168.1.13:3306/ksudi_new?characterEncoding=utf-8"></property>  
 		<property name="username" value="root"></property>  
-		<property name="password" value="root"></property>
+		<property name="password" value="123456"></property>
 	</bean>
 	<!-- dynamic data source config -->
 	<!-- 
@@ -67,6 +67,10 @@
 	
 	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">  
     	<property name="dataSource" ref="dataSource" />  
+	</bean>
+	
+	<bean id="sqlSessionTemplate" class="org.mybatis.spring.SqlSessionTemplate">
+		<constructor-arg ref="sqlSessionFactory"/>
 	</bean>
 	
 	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">  
@@ -89,8 +93,25 @@
         <property name="cacheManager" ref="cacheManager" />
         <property name="commonMapper" ref="commonMapper" />
         <property name="resolveDatabase" ref="resolveDatabase" />
+        <property name="sqlSessionTemplate" ref="sqlSessionTemplate" />
     </bean>
     
-    
+    <bean id="dynamicDataSource" class="cn.uncode.dal.datasource.DynamicDataSource">
+		<property name="shardsDataSources">
+			<map>
+				<entry key="readDataSourceOne" value-ref="dataSource1"/>
+				<entry key="readDataSourceTwo" value-ref="dataSource2"/>
+			</map>
+		</property>
+		<property name="tableRules">
+			<map>
+				<entry key="t_student" value="one:1-2,two:2"/>
+				<entry key="t_student2" value="one:1-2,two:2"/>
+			</map>
+		</property>
+		<property name="default" ref="dataSource2" />
+	</bean>
+	
+	
 
 </beans>

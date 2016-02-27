@@ -1,7 +1,8 @@
+
 uncode-dal
 ===========
 
-本着不重复造轮子的原则，基于mybatis、spring jdbc、hibernate等ORM的通用数据访问层，支持基于datasource的读写分离、主备自动切换和故障转移，支持简单的负载均衡。
+本着不重复造轮子的原则，基于mybatis、spring jdbc、hibernate、mongo等ORM的通用数据访问层，支持基于datasource的读写分离、主备自动切换和故障转移，支持简单的负载均衡。
 
 
 [TOC]
@@ -89,6 +90,14 @@ jar文件下载地址：http://www.uncode.cn/uncode-dal/uncode-dal-all-1.0.3.zip
             <!-- 备数据库配置 -->
 			<property name="standbyDataSource" ref="dataSource2" />
 		</bean>
+		
+		<!--可选，使用动态数据源读写分离时必选 -->
+		<bean id="transactionManager" class="cn.uncode.dal.jdbc.datasource.DataSourceTransactionManager">
+			<property name="dataSource" ref="dataSource" />
+		</bean>
+		
+		<!-- 可选，Spring事务 -->
+		<tx:annotation-driven transaction-manager="transactionManager" />
 
 
 ### 2 Spring jdbc 实现配置
@@ -169,7 +178,8 @@ jar文件下载地址：http://www.uncode.cn/uncode-dal/uncode-dal-all-1.0.3.zip
             <property name="username" value="xiaocong" />
 			<property name="password" value="xiaocong" />
  		</bean>
-
+		
+		<!-- 注意，mongo3.x请使用cn.uncode.dal.mongo.Mongo3DAL -->
         <bean id="mongoDAL" class="cn.uncode.dal.mongo.MongoDAL">
             <property name="database" ref="mongoDataBase"></property>
             <!-- 可选，配置全局不使用缓存，默认为true -->
@@ -254,6 +264,9 @@ Object带主键对象实体
         Object insert(Object obj);
         Object insert(String table, Map<String, Object> obj);
         Object insert(String database, String table, Map<String, Object> obj);
+		void asynInsert(Object obj);
+        void asynInsert(String table, Map<String, Object> obj);
+        void asynInsert(String database, String table, Map<String, Object> obj);
 
 ### 5 更新
 
@@ -304,7 +317,9 @@ database数据名称，tableName表名称
         setTable(Class<?> clazz)
 
 ### 9 Criteria方法
-
+		Criteria append(Condition condition, String filed, Object value)
+		Criteria append(String filed, Object value)
+		Criteria append(String sql)
 		andColumnIsNull(String column)
         andColumnIsNotNull(String column)
         andColumnEqualTo(String column, Object value) 
@@ -467,8 +482,9 @@ database数据名称，tableName表名称
             //创建条件封装对象
         	Criteria critera = queryCriteria.createCriteria();
             //设置条件
-        	critera.andColumnGreaterThan(“age”, 18);
-            critera.andColumnEqualTo("status", 1);
+			critera.append(Condition.GREATER_THAN, "age", 18).append("status", 1);
+        	//critera.andColumnGreaterThan(“age”, 18);
+            //critera.andColumnEqualTo("status", 1);
             //查询所有字段并缓存
         	QueryResult result =  baseDAL.selectByCriteria(queryCriteria);
             //查询部分字段缓存60称
@@ -623,8 +639,9 @@ database数据名称，tableName表名称
             //创建条件封装对象
         	Criteria critera = queryCriteria.createCriteria();
             //设置条件
-        	critera.andColumnGreaterThan(User.AGE, 18);
-            critera.andColumnEqualTo(User.STATUS, 1);
+			critera.append(Condition.GREATER_THAN, "age", 18).append("status", 1);
+        	//critera.andColumnGreaterThan(User.AGE, 18);
+            //critera.andColumnEqualTo(User.STATUS, 1);
             //查询所有字段并缓存
         	QueryResult result =  baseDAL.selectByCriteria(queryCriteria);
             //查询部分字段不缓存
@@ -736,10 +753,9 @@ database数据名称，tableName表名称
 
 ## 版权
 
-作者：juny（ywj_316@qq.com）
+作者：冶卫军（ywj_316@qq.com）
 
 技术支持QQ群：47306892
 
 Copyright 2013 www.uncode.cn
-
 

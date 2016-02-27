@@ -3,6 +3,8 @@ package cn.uncode.dal.spring.jdbc;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import cn.uncode.dal.core.AbstractBaseDAL;
 import cn.uncode.dal.core.BaseDAL;
 import cn.uncode.dal.descriptor.Table;
@@ -32,7 +34,7 @@ public class SpringJDBCDAL extends AbstractBaseDAL implements BaseDAL {
 	}
 
 	@Override
-	public int _insert(Table table) {
+	public long _insert(Table table) {
 		return commonJdbcSupport.insert(table);
 	}
 
@@ -63,7 +65,7 @@ public class SpringJDBCDAL extends AbstractBaseDAL implements BaseDAL {
 	}
 	
 	@Override
-	public Object getTemplate() {
+	public JdbcTemplate getTemplate() {
 		return commonJdbcSupport.getJdbcTemplate();
 	}
 

@@ -1,6 +1,7 @@
 package cn.uncode.dal.descriptor;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -16,11 +17,17 @@ public class QueryResult implements Serializable {
      */
     private static final long serialVersionUID = 5675310807548144110L;
     
+    private List<Map<String, Object>> copyForShardResult = new ArrayList<Map<String, Object>>();
+    
     private List<Map<String, Object>> resultList;
     
     private Map<String, Object> resultMap;
     
     private Map<String, Object> page;
+    
+    public void addShardResult(List<Map<String, Object>> shardResult){
+    	copyForShardResult.addAll(shardResult);
+    }
 
     public void setResultList(List<Map<String, Object>> resultList) {
         this.resultList = resultList;
@@ -42,12 +49,12 @@ public class QueryResult implements Serializable {
     
     public Map<String, Object> getWithAliasName(Map<String, String> aliasName){
     	Map<String, Object> result = get();
-        return getWithAliasName(result, aliasName);
+        return getResultWithAliasName(result, aliasName);
     }
     
     public Map<String, Object> getWithAliasName(List<String> hiddenFields, Map<String, String> aliasName){
     	Map<String, Object> result = get(hiddenFields);
-    	result = getWithAliasName(result, aliasName);
+    	result = getResultWithAliasName(result, aliasName);
         return result;
     }
     
@@ -81,16 +88,28 @@ public class QueryResult implements Serializable {
         return resultList;
     }
     
+    @Deprecated
     public List<Map<String, Object>> getList(Map<String, String> aliasName){
+        return getResultListWithAliasName(resultList, aliasName);
+    }
+    
+    public List<Map<String, Object>> getListWithAliasName(Map<String, String> aliasName){
     	if(aliasName != null && resultList != null){
-    		resultList = getListWithAliasName(resultList, aliasName);
+    		resultList = getResultListWithAliasName(resultList, aliasName);
     	}
         return resultList;
     }
     
+    @Deprecated
     public List<Map<String, Object>> getList(List<String> hiddenFields, Map<String, String> aliasName){
     	resultList = getList(hiddenFields);
-    	resultList = getList(aliasName);
+    	resultList = getListWithAliasName(aliasName);
+        return resultList;
+    }
+    
+    public List<Map<String, Object>> getListWithAliasName(List<String> hiddenFields, Map<String, String> aliasName){
+    	resultList = getList(hiddenFields);
+    	resultList = getListWithAliasName(aliasName);
         return resultList;
     }
     
@@ -112,12 +131,13 @@ public class QueryResult implements Serializable {
 	public Map<String, Object> getPage() {
 		return page;
 	}
+	
 
 	public void setPage(Map<String, Object> page) {
 		this.page = page;
 	}
     
-	private Map<String, Object> getWithAliasName(Map<String, Object> result, Map<String, String> aliasName){
+	private Map<String, Object> getResultWithAliasName(Map<String, Object> result, Map<String, String> aliasName){
     	if(result != null && result.size() > 0 && null != aliasName){
     		for(Entry<String, String> item : aliasName.entrySet()){
     			if(StringUtils.isNotBlank(item.getKey()) && StringUtils.isNotBlank(item.getValue())){
@@ -129,7 +149,7 @@ public class QueryResult implements Serializable {
         return result;
     }
 	
-	private List<Map<String, Object>> getListWithAliasName(List<Map<String, Object>> result, Map<String, String> aliasName){
+	private List<Map<String, Object>> getResultListWithAliasName(List<Map<String, Object>> result, Map<String, String> aliasName){
     	if(result != null && result.size() > 0 && null != aliasName){
     		for(Entry<String, String> item : aliasName.entrySet()){
     			for(Map<String, Object> map : result){

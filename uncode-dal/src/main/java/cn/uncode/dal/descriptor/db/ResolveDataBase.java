@@ -2,6 +2,9 @@ package cn.uncode.dal.descriptor.db;
 
 import java.util.List;
 
+import javax.sql.DataSource;
+
+import cn.uncode.dal.cache.CacheManager;
 import cn.uncode.dal.descriptor.Table;
 
 public interface ResolveDataBase {
@@ -46,5 +49,9 @@ public interface ResolveDataBase {
      * @return all table names
      */
     public List<String> loadTables();
+    
+    public void setCacheManager(CacheManager cacheManager);
+
+    public void setDataSource(DataSource dataSource);
 
 }

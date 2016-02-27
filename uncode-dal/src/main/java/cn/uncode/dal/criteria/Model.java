@@ -98,7 +98,7 @@ public class Model implements Serializable {
         context.put(DATA_BASE, database);
     }
     
-    public void setVersion(String version) {
+    public void setVersion(Object version) {
         context.put(VERSION, version);
     }
 
@@ -119,7 +119,7 @@ public class Model implements Serializable {
     }
     
     public Object getVersion() {
-        return context.get(VERSION);
+        return content.get(VERSION);
     }
 
     public void setField(String field, Object value) {

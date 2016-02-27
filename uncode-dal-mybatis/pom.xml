@@ -5,7 +5,7 @@
   <parent>
     <groupId>cn.uncode</groupId>
     <artifactId>uncode-dal-root</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.6</version>
   </parent>
   
   <artifactId>uncode-dal-mybatis</artifactId>
@@ -13,14 +13,13 @@
   
   
   <name>uncode-dal-mybatis</name>
-  <url>http://maven.apache.org</url>
   
   <dependencies>
   
         <dependency>
             <groupId>cn.uncode</groupId>
             <artifactId>uncode-dal</artifactId>
-            <version>1.0.3</version>
+            <version>1.0.6</version>
         </dependency>
         
 
@@ -31,13 +30,19 @@
         <dependency>
             <groupId>org.mybatis</groupId>
             <artifactId>mybatis</artifactId>
-            <version>3.2.2</version>
+            <version>${mybatis.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.mybatis</groupId>
             <artifactId>mybatis-spring</artifactId>
-            <version>1.1.1</version>
+            <version>${mybatis.spring.version}</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>${lang3.version}</version>
         </dependency>
 
         <!-- ==================== -->
@@ -57,5 +62,6 @@
         
         
     </dependencies>
+  
   
 </project>

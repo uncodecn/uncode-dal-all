@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -13,16 +14,17 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.support.JdbcDaoSupport;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
+
 import cn.uncode.dal.descriptor.Table;
 import cn.uncode.dal.descriptor.resolver.JavaType;
 import cn.uncode.dal.descriptor.resolver.JavaTypeConversion;
 import cn.uncode.dal.descriptor.resolver.JavaTypeResolver;
 import cn.uncode.dal.spring.jdbc.model.ModifyParams;
 import cn.uncode.dal.spring.jdbc.template.SqlTemplate;
-import org.springframework.jdbc.core.PreparedStatementCreator;
-import org.springframework.jdbc.core.support.JdbcDaoSupport;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
 
 public class CommonJdbcSupport extends JdbcDaoSupport {
 
@@ -30,21 +32,33 @@ public class CommonJdbcSupport extends JdbcDaoSupport {
     public List<Map<String, Object>> selectByCriteria(final Table table) {
         SqlTemplate sqlTemplate = new SqlTemplate();
         final String sql = sqlTemplate.selectByCriteria(table);
-        return getJdbcTemplate().queryForList(sql, buildParameters(table.getConditions()));
+        final Object[] param = buildParameters(table.getConditions());
+        return getJdbcTemplate().queryForList(sql, param);
     }
 
     private Object[] buildParameters(LinkedHashMap<String, Object> params) {
-        Object[] objs = null;
+        
+        ArrayList<Object> objs = new ArrayList<Object>();
+        
+                
         if (params != null && params.size() > 0) {
-            objs = new Object[params.size()];
+
             Iterator<Object> values = params.values().iterator();
-            int index = 0;
+
             while (values.hasNext()) {
-                objs[index] = values.next();
-                index++;
+            	Object obj = values.next();
+            	if(obj instanceof List){//如果参数是List
+            		for(Object oneVal : (List)obj){
+            			objs.add(oneVal);
+            		}
+            	}else{
+            		objs.add(obj);
+            	}
+                
             }
         }
-        return objs;
+        
+        return objs.toArray();
     }
 
     private Object[] buildPrimaryKeyParameters(final Table table) {
@@ -63,7 +77,7 @@ public class CommonJdbcSupport extends JdbcDaoSupport {
     public int countByCriteria(final Table table) {
         SqlTemplate sqlTemplate = new SqlTemplate();
         final String sql = sqlTemplate.countByCriteria(table);
-        return getJdbcTemplate().queryForInt(sql, buildParameters(table.getConditions()));
+        return getJdbcTemplate().queryForObject(sql, buildParameters(table.getConditions()), Integer.class);
     }
 
 
@@ -75,7 +89,7 @@ public class CommonJdbcSupport extends JdbcDaoSupport {
     }
 
 
-    public int insert(Table table) {
+    public long insert(Table table) {
         SqlTemplate sqlTemplate = new SqlTemplate();
         final String sql = sqlTemplate.insert(table);
         final ModifyParams modifyParams = buildInsertParameters(table);
@@ -116,7 +130,7 @@ public class CommonJdbcSupport extends JdbcDaoSupport {
             }
         }, keyHolder);
 
-        return keyHolder.getKey().intValue();
+        return keyHolder.getKey().longValue();
     }
 
     private ModifyParams buildInsertParameters(Table table) {
@@ -167,8 +181,8 @@ public class CommonJdbcSupport extends JdbcDaoSupport {
         int index = 0;
         modifyParams = new ModifyParams();
         if (paramsMap != null) {
-            params = new Object[paramsMap.size()];
-            types = new int[paramsMap.size()];
+            params = new Object[paramsMap.size()+conditionsMap.size()];
+            types = new int[paramsMap.size()+conditionsMap.size()];
             Iterator<String> iter = paramsMap.keySet().iterator();
             while (iter.hasNext()) {
                 String key = iter.next();

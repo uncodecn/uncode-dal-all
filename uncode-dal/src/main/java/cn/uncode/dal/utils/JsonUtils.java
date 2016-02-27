@@ -1,27 +1,19 @@
 package cn.uncode.dal.utils;
 
 import java.io.IOException;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import java.lang.reflect.InvocationTargetException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import org.apache.commons.beanutils.BeanMap;
+import org.apache.commons.beanutils.BeanUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonParseException;
@@ -30,41 +22,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize.Inclusion;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-
-import org.apache.commons.beanutils.BeanUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
-import org.springframework.cglib.beans.BeanCopier;
-import org.springframework.cglib.beans.BeanMap;
 
 
 /**
@@ -78,7 +35,7 @@ import org.springframework.cglib.beans.BeanMap;
  */
 public class JsonUtils {
     
-    private static final Logger LOG = Logger.getLogger(JsonUtils.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JsonUtils.class);
     
     /** 格式化时间的string */
     private static final String DATE_TIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
@@ -166,7 +123,7 @@ public class JsonUtils {
     		Object bean = null;
     		try {
     			bean = valueType.newInstance();
-    			BeanMap beanMap = BeanMap.create(bean);
+    			BeanMap beanMap = new BeanMap(bean);
     			for(Object key : beanMap.keySet()){
     				String keyName = String.valueOf(key).toLowerCase();
     				if(keyMap.containsKey(keyName)){
@@ -185,25 +142,39 @@ public class JsonUtils {
     	return null;
     }
     
+    public static <T> T toObj(Object obj, Class<T> typeReference) {
+    	T  result = MAPPER.convertValue(obj, typeReference);
+        return result;
+    }
+    
     public static <T> List<T> mapListToObjList(List<Map<String, Object>> resultList, Class<T> beanClass) {
     	if(null != resultList && resultList.size() > 0){
-    		Map<?,?> map = resultList.get(0);
-    		Map<String, Object> keyMap = new HashMap<String, Object>();
-        	for(Object key : map.keySet()){
-        		keyMap.put(String.valueOf(key).toLowerCase(), key);
-        	}
     		BeanMap beanMap = null;
     		List<T> rtList = new ArrayList<T>();
     		try {
     			for(Map<String, Object> item:resultList){
-    				beanMap = BeanMap.create(beanClass.newInstance());
+    				Object bean = beanClass.newInstance();
+    				beanMap = new BeanMap(bean);
         			for(Object key : beanMap.keySet()){
         				String keyName = String.valueOf(key).toLowerCase();
-        				if(keyMap.containsKey(keyName)){
-        					beanMap.put(key, item.get(keyMap.get(keyName)));
+        				if(item.containsKey(keyName)){
+        					try {
+        						Object value = item.get(keyName);
+        						if(value instanceof Map){
+        							Map<String, Object> valueMap = (Map<String, Object>) value;
+        							if(valueMap.containsKey("$numberLong")){
+        								value = valueMap.get("$numberLong");
+        							}else{
+        								
+        							}
+        						}
+        						BeanUtils.copyProperty(bean, String.valueOf(key), value);
+							} catch (InvocationTargetException e) {
+								LOG.error("Bean copy property error.",e);
+							}
         				}
         			}
-        			rtList.add(beanClass.cast(beanMap.getBean()));
+        			rtList.add(beanClass.cast(bean));
     			}
     			
     		} catch (InstantiationException e) {

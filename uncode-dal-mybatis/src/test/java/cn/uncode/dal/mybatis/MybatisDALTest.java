@@ -4,26 +4,24 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 import cn.uncode.dal.core.BaseDAL;
 import cn.uncode.dal.criteria.QueryCriteria;
 import cn.uncode.dal.criteria.QueryCriteria.Criteria;
 import cn.uncode.dal.descriptor.QueryResult;
 import cn.uncode.dal.utils.JsonUtils;
+import cn.uncode.dal.mybatis.User;
 
-@RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration("classpath:application.xml")
 public class MybatisDALTest {
+	
+	static ClassPathXmlApplicationContext context;
     
-    @Autowired
-    private BaseDAL baseDAL;
+    private static BaseDAL baseDAL;
     
     @Test
     public void testSelectByCriteria(){
+		startService();
         QueryCriteria queryCriteria = new QueryCriteria();
         queryCriteria.setTable(User.class);
         Criteria critera = queryCriteria.createCriteria();
@@ -35,8 +33,10 @@ public class MybatisDALTest {
     
     @Test
     public void testSelectByPrimaryKey1(){
+    	startService();
+		baseDAL = (BaseDAL) context.getBean("baseDAL");
         User user = new User();
-        user.setId(1);
+        user.setId(124);
         QueryResult result =  baseDAL.selectByPrimaryKey(user);
         System.out.println(result.get());
     }
@@ -53,6 +53,7 @@ public class MybatisDALTest {
     
     @Test
     public void testInsert1(){
+    	startService();
         User user = new User();
         user.setName("test001236501");
         Object result = baseDAL.insert(user);
@@ -62,8 +63,9 @@ public class MybatisDALTest {
     
     @Test
     public void testInsert2(){
+    	startService();
     	Map<String, Object> content = new HashMap<String, Object>();
-    	content.put("username", "test001236501");
+    	content.put("nickname", "test001236501");
     	Object result = baseDAL.insert("user", content);
         System.out.println(result);
     }
@@ -89,6 +91,13 @@ public class MybatisDALTest {
     @Test
     public void testDeleteByPrimaryKey3(){
         int result = baseDAL.deleteByPrimaryKey("user", 165);
+        System.out.println(result);
+    }
+    
+    @Test
+    public void testDeleteByPrimaryKey4(){
+    	startService();
+        int result = baseDAL.deleteByPrimaryKey("express", 165);
         System.out.println(result);
     }
     
@@ -140,5 +149,16 @@ public class MybatisDALTest {
     	User user = JsonUtils.mapToObj(map, User.class);
         //System.out.println(user.getUserName()+"=="+user.getPwd());
     }
+    
+    
+	public static void startService(){
+		try {
+			context = new ClassPathXmlApplicationContext(new String[] { "application.xml"});
+			context.start();
+			baseDAL = (BaseDAL) context.getBean("baseDAL");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
 
 }

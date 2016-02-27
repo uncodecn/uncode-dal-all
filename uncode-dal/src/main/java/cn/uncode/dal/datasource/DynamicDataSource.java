@@ -11,7 +11,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.sql.DataSource;
 
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.jdbc.datasource.AbstractDataSource;
 import org.springframework.jdbc.datasource.lookup.DataSourceLookup;
@@ -20,13 +21,15 @@ import org.springframework.jdbc.datasource.lookup.JndiDataSourceLookup;
 
 public class DynamicDataSource extends AbstractDataSource implements InitializingBean{
 	
-	private static Logger LOG = Logger.getLogger(DynamicDataSource.class);
+	private int counter = 1;
+	
+	private static Logger LOG = LoggerFactory.getLogger(DynamicDataSource.class);
 	
 	private long checkTimeInterval = 10000;
 	
 	private ConcurrentLinkedQueue<Object> disconnectDataSources = new ConcurrentLinkedQueue<Object>();
 	
-	private Map<Object, Object> slaveDataSources;
+	private Map<Object, Object> slaveDataSources = new HashMap<Object, Object>();
 
 	private DataSourceLookup dataSourceLookup = new JndiDataSourceLookup();
 
@@ -58,11 +61,7 @@ public class DynamicDataSource extends AbstractDataSource implements Initializin
 	protected Object determineCurrentLookupKey() {
 		String dataSourceKey = DBContextHolder.getCurrentDataSourceKey();
 		if(LOG.isDebugEnabled()){
-		   if(dataSourceKey == null){
-			   LOG.debug("none routing key, choose defaultDataSource for current connection");
-		   }else{
-			   LOG.debug("choose dataSource for current connection by routing key " +  dataSourceKey );
-		   }
+			LOG.debug("-->Thread local lookup key:" +  dataSourceKey );
 		}
 		return dataSourceKey;
 	}
@@ -77,7 +76,7 @@ public class DynamicDataSource extends AbstractDataSource implements Initializin
 	
 	public void afterPropertiesSet() {
 		if (this.slaveDataSources == null) {
-			throw new IllegalArgumentException("Property 'slaveDataSources' is required");
+			//throw new IllegalArgumentException("Property 'slaveDataSources' is required");
 		}
 		this.resolvedSlaveDataSources = new HashMap<Object, DataSource>(this.slaveDataSources.size());
 		for (Map.Entry<Object, Object> entry : this.slaveDataSources.entrySet()) {
@@ -103,24 +102,36 @@ public class DynamicDataSource extends AbstractDataSource implements Initializin
 		Object dataSourceKey = null;
 		if(DBContextHolder.READ.equals(lookupKey)){
 			if(!this.resolvedSlaveDataSources.isEmpty()){
-				int size = this.resolvedSlaveDataSources.size();
-				int index = 0;
-				int targetIndex = 0;
-				if(size > 1){
-					targetIndex = RANDOM.nextInt(size);
+				if(DBContextHolder.REPORT.equals(lookupKey)){
+					dataSourceKey = lookupKey;
+					dataSource = resolvedSlaveDataSources.get(dataSourceKey);
 				}
-				for(Map.Entry<Object,DataSource> entry: resolvedSlaveDataSources.entrySet()) {
-					if(index == targetIndex){
-						dataSource = entry.getValue();
-						dataSourceKey = entry.getKey();
-						break;
+				if(dataSource == null){
+					int size = this.resolvedSlaveDataSources.size();
+					int index = 0;
+					int targetIndex = 0;
+					if(size > 1){
+						targetIndex = RANDOM.nextInt(size);
 					}
-					index++;
+					for(Map.Entry<Object,DataSource> entry: resolvedSlaveDataSources.entrySet()) {
+						if(index == targetIndex){
+							dataSource = entry.getValue();
+							dataSourceKey = entry.getKey();
+							break;
+						}
+						index++;
+					}
 				}
 			}else{
 				LOG.debug("Resolved slave data source is empty.");
 			}
+		}else{
+			if(DBContextHolder.STANDBY.equals(lookupKey)){
+				dataSource = resolvedStandbyDataSource;
+				dataSourceKey = DBContextHolder.STANDBY;
+			}
 		}
+		
 		if (dataSource == null) {
 			dataSource = this.getCurrentDataSource();
 			dataSourceKey = MASTER_DATASOURCE_KEY;
@@ -129,22 +140,29 @@ public class DynamicDataSource extends AbstractDataSource implements Initializin
 			throw new IllegalStateException("Cannot determine target DataSource for lookup key [" + lookupKey + "]");
 		}
 		
-		LOG.debug("Determine data source, [lookup key : " + lookupKey + ", data source key : " + dataSourceKey);
+		LOG.debug("-->Dynamic datasource, [lookup key : " + lookupKey + ", datasource key : " + dataSourceKey);
 		
 		try{
-			return dataSource.getConnection();
+			Connection connection = dataSource.getConnection();
+			counter = 0;
+			return connection;
 		}catch(SQLException sqle){
 			LOG.error("Get Connection Exception " + dataSource , sqle);
-			if(!disconnectDataSources.contains(dataSourceKey)){
-				disconnectDataSources.add(dataSourceKey);
+			counter++;
+			if(counter == 3){
+				if(!disconnectDataSources.contains(dataSourceKey)){
+					disconnectDataSources.add(dataSourceKey);
+				}
+				if(DBContextHolder.WRITE.equals(lookupKey)){
+					this.switchToAvailableDataSource();
+				}else if(DBContextHolder.READ.equals(lookupKey)){
+					resolvedSlaveDataSources.remove(dataSourceKey);
+				}else{
+					this.switchToAvailableDataSource();
+				}
+				counter = 0;
 			}
-			if(DBContextHolder.WRITE.equals(lookupKey)){
-				this.switchToAvailableDataSource();
-			}else if(DBContextHolder.READ.equals(lookupKey)){
-				resolvedSlaveDataSources.remove(dataSourceKey);
-			}else{
-				this.switchToAvailableDataSource();
-			}
+			
 			throw sqle;
 		}
 	}
@@ -159,24 +177,36 @@ public class DynamicDataSource extends AbstractDataSource implements Initializin
 		Object dataSourceKey = null;
 		if(DBContextHolder.READ.equals(lookupKey)){
 			if(!this.resolvedSlaveDataSources.isEmpty()){
-				int size = this.resolvedSlaveDataSources.size();
-				int index = 0;
-				int targetIndex = 0;
-				if(size > 1){
-					targetIndex = RANDOM.nextInt(size);
+				if(DBContextHolder.REPORT.equals(lookupKey)){
+					dataSourceKey = lookupKey;
+					dataSource = resolvedSlaveDataSources.get(dataSourceKey);
 				}
-				for(Map.Entry<Object,DataSource> entry: resolvedSlaveDataSources.entrySet()) {
-					if(index == targetIndex){
-						dataSource = entry.getValue();
-						dataSourceKey = entry.getKey();
-						break;
+				if(dataSource == null){
+					int size = this.resolvedSlaveDataSources.size();
+					int index = 0;
+					int targetIndex = 0;
+					if(size > 1){
+						targetIndex = RANDOM.nextInt(size);
 					}
-					index++;
+					for(Map.Entry<Object,DataSource> entry: resolvedSlaveDataSources.entrySet()) {
+						if(index == targetIndex){
+							dataSource = entry.getValue();
+							dataSourceKey = entry.getKey();
+							break;
+						}
+						index++;
+					}
 				}
 			}else{
 				LOG.debug("Resolved slave data source is empty.");
 			}
+		}else{
+			if(DBContextHolder.STANDBY.equals(lookupKey)){
+				dataSource = resolvedStandbyDataSource;
+				dataSourceKey = DBContextHolder.STANDBY;
+			}
 		}
+		
 		if (dataSource == null) {
 			dataSource = this.getCurrentDataSource();
 			dataSourceKey = MASTER_DATASOURCE_KEY;
@@ -185,24 +215,32 @@ public class DynamicDataSource extends AbstractDataSource implements Initializin
 			throw new IllegalStateException("Cannot determine target DataSource for lookup key [" + lookupKey + "]");
 		}
 		
-		LOG.debug("Determine data source, [lookup key : " + lookupKey + ", data source key : " + dataSourceKey);
+		LOG.debug("-->Dynamic datasource, [lookup key : " + lookupKey + ", datasource key : " + dataSourceKey);
 		
 		try{
-			return dataSource.getConnection(username, password);
+			Connection connection = dataSource.getConnection();
+			counter = 0;
+			return connection;
 		}catch(SQLException sqle){
 			LOG.error("Get Connection Exception " + dataSource , sqle);
-			if(!disconnectDataSources.contains(dataSourceKey)){
-				disconnectDataSources.add(dataSourceKey);
+			counter++;
+			if(counter == 3){
+				if(!disconnectDataSources.contains(dataSourceKey)){
+					disconnectDataSources.add(dataSourceKey);
+				}
+				if(DBContextHolder.WRITE.equals(lookupKey)){
+					this.switchToAvailableDataSource();
+				}else if(DBContextHolder.READ.equals(lookupKey)){
+					resolvedSlaveDataSources.remove(dataSourceKey);
+				}else{
+					this.switchToAvailableDataSource();
+				}
+				counter = 0;
 			}
-			if(DBContextHolder.WRITE.equals(lookupKey)){
-				this.switchToAvailableDataSource();
-			}else if(DBContextHolder.READ.equals(lookupKey)){
-				resolvedSlaveDataSources.remove(dataSourceKey);
-			}else{
-				this.switchToAvailableDataSource();
-			}
+			
 			throw sqle;
 		}
+	
 	}
 	
 	protected DataSource resolveSpecifiedDataSource(Object dataSource) throws IllegalArgumentException {

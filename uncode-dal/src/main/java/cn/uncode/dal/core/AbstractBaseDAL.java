@@ -1,17 +1,29 @@
 package cn.uncode.dal.core;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import cn.uncode.dal.asyn.AsynContext;
+import cn.uncode.dal.asyn.AsynSQLTask;
+import cn.uncode.dal.asyn.Method;
 import cn.uncode.dal.cache.CacheManager;
 import cn.uncode.dal.criteria.Model;
 import cn.uncode.dal.criteria.QueryCriteria;
+import cn.uncode.dal.descriptor.Column;
 import cn.uncode.dal.descriptor.Content;
 import cn.uncode.dal.descriptor.QueryResult;
 import cn.uncode.dal.descriptor.Table;
@@ -19,14 +31,22 @@ import cn.uncode.dal.descriptor.db.ResolveDataBase;
 import cn.uncode.dal.descriptor.resolver.JavaType;
 import cn.uncode.dal.descriptor.resolver.JavaTypeConversion;
 import cn.uncode.dal.descriptor.resolver.JavaTypeResolver;
-import cn.uncode.dal.exception.StaleObjectStateException;
+import cn.uncode.dal.event.EventListener;
+import cn.uncode.dal.event.EventManager;
+import cn.uncode.dal.event.asyn.EventContext;
+import cn.uncode.dal.exception.DalSqlException;
 import cn.uncode.dal.internal.util.message.Messages;
 import cn.uncode.dal.router.DefaultMasterSlaveRouter;
 import cn.uncode.dal.router.MasterSlaveRouter;
 
-public abstract class AbstractBaseDAL implements BaseDAL {
+public abstract class AbstractBaseDAL implements BaseDAL{
 
-    private static final Logger LOG = Logger.getLogger(AbstractBaseDAL.class);
+    private static final Logger LOG =LoggerFactory.getLogger(AbstractBaseDAL.class);
+    
+    private static final String CACHE_KEY_PREFIX = "uncode_dal_";
+    private static final String CACHE_KEY_SELECT_BY_CRITERIA = "_selectByCriteria_";
+    private static final String CACHE_KEY_COUNT_BY_CRITERIA = "_countByCriteria_";
+    private static final String CACHE_KEY_SELECT_BY_PRIMARY_KEY = "_selectByPrimaryKey_";
 
     protected CacheManager cacheManager;
 
@@ -37,6 +57,44 @@ public abstract class AbstractBaseDAL implements BaseDAL {
     protected boolean useCache = true;
     
     protected String version;
+    
+    protected List<String> versionTables;
+    
+    protected List<String> listenerNames;
+    
+    protected List<String> noCacheTables;
+    
+    protected String transactionalPackage;
+    
+    //-------------------------
+    // 异步
+    //-------------------------
+    /**
+     * 日志队列
+     */
+    private BlockingQueue<AsynContext> sqlQueue;
+    /**
+     * 写线程池
+     */
+    private ExecutorService asynWriterService;
+    /**
+     * 异步日志线程池大小
+     */
+    private int asynWriterThreadSize = 2;
+    private List<AsynSQLTask> tasks = new ArrayList<AsynSQLTask>();
+    
+    public AbstractBaseDAL(){
+    	noCacheTables = new ArrayList<String>();
+    	sqlQueue = new LinkedBlockingQueue<AsynContext>();
+        asynWriterService = Executors.newFixedThreadPool(asynWriterThreadSize);
+        for (int i = 0; i < asynWriterThreadSize; i++) {
+        	AsynSQLTask task = new AsynSQLTask(this);
+            task.setLogQueue(sqlQueue);
+            tasks.add(task);
+            asynWriterService.submit(task);
+        }
+        LOG.info("Asyn dal init ok!");
+    }
     
     public QueryResult selectPageByCriteria(QueryCriteria queryCriteria){
     	List<String> fields = null;
@@ -84,11 +142,10 @@ public abstract class AbstractBaseDAL implements BaseDAL {
     
     @Override
     public QueryResult selectByCriteria(List<String> fields, QueryCriteria queryCriteria, int seconds) {
-
+    	EventManager.getInstance().sendEvent(new EventContext(Method.SELECT_BY_CRITERIA, true, fields, queryCriteria, seconds, false));
         if (router != null) {
             router.routeToSlave();
         }
-
         QueryResult queryResult = new QueryResult();
 
         int hashcode = 0;
@@ -98,14 +155,17 @@ public abstract class AbstractBaseDAL implements BaseDAL {
             }
         }
         hashcode += queryCriteria.hashCode();
-        String cacheKey = queryCriteria.getTable() + "_selectByCriteria_" + hashcode;
+        String cacheKey = queryCriteria.getTable() + CACHE_KEY_SELECT_BY_CRITERIA + hashcode;
         if (StringUtils.isNotBlank(queryCriteria.getDatabase())) {
-            cacheKey = queryCriteria.getDatabase() + "#" + cacheKey;
+            cacheKey = CACHE_KEY_PREFIX + queryCriteria.getDatabase() + "#" + cacheKey;
+        }else{
+        	cacheKey = CACHE_KEY_PREFIX + cacheKey;
         }
-        if (cacheManager != null && seconds != NO_CACHE && useCache) {
+        if (cacheManager != null && seconds != NO_CACHE && useCache && !noCacheTables.contains(queryCriteria.getTable())) {
             List<Map<String, Object>> value = (List<Map<String, Object>>) cacheManager.getCache().getObject(cacheKey);
             if (value != null && value.size() > 0) {
                 queryResult.setResultList(value);
+                EventManager.getInstance().sendEvent(new EventContext(Method.SELECT_BY_CRITERIA, false, queryResult, true));
                 return queryResult;
             }
         }
@@ -124,7 +184,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
         List<Map<String, Object>> result = _selectByCriteria(table);
         
         //查询结果存在,才进行缓存
-        if (cacheManager != null && seconds != NO_CACHE && useCache && result.size() > 0) {
+        if (cacheManager != null && seconds != NO_CACHE && useCache && result.size() > 0 && !noCacheTables.contains(queryCriteria.getTable())) {
             if (seconds > 0) {
                 cacheManager.getCache().putObject(cacheKey, result, seconds);
             } else {
@@ -134,6 +194,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 
         if (result != null) {
             queryResult.setResultList(result);
+            EventManager.getInstance().sendEvent(new EventContext(Method.SELECT_BY_CRITERIA, false, queryResult, false));
             return queryResult;
         } else {
             return null;
@@ -170,36 +231,57 @@ public abstract class AbstractBaseDAL implements BaseDAL {
         }
         return table;
     }
-
+    
     @Override
     public int countByCriteria(QueryCriteria queryCriteria, int seconds) {
-
+    	return countByCriteria(null, queryCriteria, seconds);
+    }
+    @Override
+	public int countByCriteria(List<String> fields, QueryCriteria queryCriteria) {
+    	return countByCriteria(fields, queryCriteria, PERSISTENT_CACHE);
+	}
+    @Override
+    public int countByCriteria(List<String> fields, QueryCriteria queryCriteria, int seconds) {
+    	EventManager.getInstance().sendEvent(new EventContext(Method.COUNT_BY_CRITERIA, true, fields, queryCriteria, seconds, false));
         if (router != null) {
             router.routeToSlave();
         }
 
         int hashcode = 0;
         hashcode += queryCriteria.hashCode();
-        String cacheKey = queryCriteria.getTable() + "_countByCriteria_" + hashcode;
+        String cacheKey = queryCriteria.getTable() + CACHE_KEY_COUNT_BY_CRITERIA + hashcode;
         if (StringUtils.isNotBlank(queryCriteria.getDatabase())) {
-            cacheKey = queryCriteria.getDatabase() + "#" + cacheKey;
+            cacheKey = CACHE_KEY_PREFIX + queryCriteria.getDatabase() + "#" + cacheKey;
+        }else{
+        	cacheKey = CACHE_KEY_PREFIX + cacheKey;
         }
-        if (cacheManager != null && seconds != NO_CACHE && useCache) {
+        if (cacheManager != null && seconds != NO_CACHE && useCache && !noCacheTables.contains(queryCriteria.getTable())) {
             Integer value = (Integer) cacheManager.getCache().getObject(cacheKey);
-            if (value != null && value > 0) {
+            if (value != null && value >= 0) {
+            	EventManager.getInstance().sendEvent(new EventContext(Method.COUNT_BY_CRITERIA, false, value, true));
                 return value;
             }
         }
         Table table = retrievalTableByQueryCriteria(queryCriteria);
+        if (fields != null && fields.size() > 0) {
+            LinkedHashMap<String, Object> fieldMap = new LinkedHashMap<String, Object>();
+            for (String field : fields) {
+                if (table.getFields().containsKey(field)) {
+                    fieldMap.put(field, true);
+                }
+            }
+            table.setParams(fieldMap);
+        }
         table.setQueryCriteria(queryCriteria);
         int result = _countByCriteria(table);
-        if (cacheManager != null && seconds != NO_CACHE && useCache && result > 0) {
+        if (cacheManager != null && seconds != NO_CACHE && useCache && result >= 0 && !noCacheTables.contains(queryCriteria.getTable())) {
             if (seconds > 0) {
                 cacheManager.getCache().putObject(cacheKey, result, seconds);
             } else {
                 cacheManager.getCache().putObject(cacheKey, result);
             }
         }
+        EventManager.getInstance().sendEvent(new EventContext(Method.COUNT_BY_CRITERIA, false, result, false));
         return result;
     }
 
@@ -293,6 +375,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 	}
 
     private QueryResult selectByPrimaryKey(List<String> fields, Model model, int seconds) {
+    	EventManager.getInstance().sendEvent(new EventContext(Method.SELECT_BY_PRIMARY_KEY, true, fields, model, seconds, false));
         if (model == null) {
             return null;
         }
@@ -301,26 +384,22 @@ public abstract class AbstractBaseDAL implements BaseDAL {
         }
 
         QueryResult queryResult = new QueryResult();
-        int hashcode = 0;
-        if (fields != null) {
-            for (String str : fields) {
-                hashcode += str.hashCode();
-            }
-        }
-        hashcode += model.hashCode();
-        String cacheKey = model.getTableName() + "_selectByPrimaryKey_" + hashcode;
+        String cacheKey = model.getTableName() + CACHE_KEY_SELECT_BY_PRIMARY_KEY + model.getSinglePrimaryKey();
         if (StringUtils.isNotBlank(model.getDatabase())) {
-            cacheKey = model.getDatabase() + "#" + cacheKey;
+            cacheKey = CACHE_KEY_PREFIX + model.getDatabase() + "#" + cacheKey;
+        }else{
+        	cacheKey = CACHE_KEY_PREFIX + cacheKey;
         }
         if (cacheManager != null && seconds != NO_CACHE && useCache) {
             Map<String, Object> value = (Map<String, Object>) cacheManager.getCache().getObject(cacheKey);
             if (value != null && value.size() > 0) {
                 queryResult.setResultMap(value);
+                EventManager.getInstance().sendEvent(new EventContext(Method.SELECT_BY_PRIMARY_KEY, false, fields, model, seconds, true));
                 return queryResult;
             }
         }
         Table table = retrievalTableByModel(model);
-        if (fields != null && fields.size() > 0) {
+        /*if (fields != null && fields.size() > 0) {
             LinkedHashMap<String, Object> fieldMap = new LinkedHashMap<String, Object>();
             for (String field : fields) {
                 if (table.getFields().containsKey(field)) {
@@ -328,7 +407,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
                 }
             }
             table.setParams(fieldMap);
-        }
+        }*/
         if (model != null) {
         	if(isNoSql()){
         		if (null != model.getSinglePrimaryKey()) {
@@ -351,7 +430,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
         }
         Map<String, Object> result = _selectByPrimaryKey(table);
 
-        if (cacheManager != null && seconds != NO_CACHE && useCache && result.size() > 0) {
+        if (cacheManager != null && seconds != NO_CACHE && useCache && result != null && result.size() > 0) {
             if (seconds > 0) {
                 cacheManager.getCache().putObject(cacheKey, result, seconds);
             } else {
@@ -359,7 +438,18 @@ public abstract class AbstractBaseDAL implements BaseDAL {
             }
         }
         if (result != null) {
-            queryResult.setResultMap(result);
+        	if(fields != null && fields.size() > 0){
+        		Map<String, Object> resultMap = new HashMap<String, Object>();
+            	for(Entry<String, Object> item:result.entrySet()){
+            		if(fields.contains(item.getKey())){
+            			resultMap.put(item.getKey(), item.getValue());
+            		}
+            	}
+            	queryResult.setResultMap(resultMap);
+    		}else{
+    			queryResult.setResultMap(result);
+    		}
+            EventManager.getInstance().sendEvent(new EventContext(Method.SELECT_BY_PRIMARY_KEY, false, fields, model, seconds, false));
             return queryResult;
         } else {
             return null;
@@ -414,6 +504,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 	}
 
     private Object insert(Model model) {
+    	EventManager.getInstance().sendEvent(new EventContext(Method.INSERT, true, model));
         if (router != null) {
             router.routeToMaster();
         }
@@ -425,7 +516,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
             throw new RuntimeException(Messages.getString("RuntimeError.8", "model.params"));
         }
 
-        int result = _insert(table);
+        Long result = _insert(table);
         Object idObj = null;
         if(result > 0){
         	idObj = table.getParams().get("id");
@@ -436,14 +527,43 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 
         if (cacheManager != null && useCache) {
             String cacheKey = model.getTableName();
-            if (StringUtils.isNotEmpty(model.getDatabase())) {
-                cacheKey = model.getDatabase() + "#" + cacheKey;
+            if (StringUtils.isNotBlank(model.getDatabase())) {
+                cacheKey = CACHE_KEY_PREFIX + model.getDatabase() + "#" + cacheKey;
+            }else{
+            	cacheKey = CACHE_KEY_PREFIX + cacheKey;
             }
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_CRITERIA);
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_COUNT_BY_CRITERIA);
+            cacheKey += CACHE_KEY_SELECT_BY_PRIMARY_KEY + model.getSinglePrimaryKey();
             cacheManager.getCache().clear(cacheKey);
+            /*cacheKey += CACHE_KEY_SELECT_BY_PRIMARY_KEY + String.valueOf(idObj);
+            if(table.hasVersion()){
+        		Object versionObj = table.getParams().get(version);
+        		if(versionObj == null){
+        			table.getParams().put(version, 0);
+        		}
+            }
+            cacheManager.getCache().putObject(cacheKey, table.getParams());*/
         }
-
+        
+        EventManager.getInstance().sendEvent(new EventContext(Method.INSERT, false, model));
         return idObj;
     }
+    
+    @Override
+	public void asynInsert(Object obj) {
+    	sqlQueue.offer(new AsynContext(Method.INSERT, obj));
+	}
+
+	@Override
+	public void asynInsert(String table, Map<String, Object> obj) {
+		sqlQueue.offer(new AsynContext(Method.INSERT_TABLE, table, obj));
+	}
+
+	@Override
+	public void asynInsert(String database, String table, Map<String, Object> obj) {
+		sqlQueue.offer(new AsynContext(Method.INSERT_DATABASE_TABLE, database, table, obj));
+	}
 
 
     /**
@@ -452,7 +572,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
      * @param table table instance
      * @return result
      */
-    public abstract int _insert(Table table);
+    public abstract long _insert(Table table);
 
     @Override
 	public int updateByCriteria(Object obj, QueryCriteria queryCriteria) {
@@ -460,29 +580,47 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 	}
 
     private int updateByCriteria(Model model, QueryCriteria queryCriteria) {
-        if (router != null) {
-            router.routeToMaster();
-        }
-        Table table = retrievalTableByQueryCriteria(queryCriteria);
-        if (model != null && model.getContent() != null && model.getContent().size() > 0) {
-            table.setParams(model.getContent());
-        } else {
-            LOG.error(Messages.getString("RuntimeError.8", "model.params"));
-            throw new RuntimeException(Messages.getString("RuntimeError.8", "model.params"));
-        }
-        
-        table.setQueryCriteria(queryCriteria);
-        
-        int result = _updateByCriteria(table);
-        if (cacheManager != null && useCache) {
-            String cacheKey = model.getTableName();
-            if (StringUtils.isNotEmpty(model.getDatabase())) {
-                cacheKey = model.getDatabase() + "#" + cacheKey;
+    	EventManager.getInstance().sendEvent(new EventContext(Method.UPDATE, true, model, queryCriteria));
+    	if(queryCriteria != null && queryCriteria.getOredCriteria() != null && queryCriteria.getOredCriteria().size() > 0){
+    		if (router != null) {
+                router.routeToMaster();
             }
-            cacheManager.getCache().clear(cacheKey);
-        }
-
-        return result;
+            Table table = retrievalTableByQueryCriteria(queryCriteria);
+            if (model != null && model.getContent() != null && model.getContent().size() > 0) {
+                table.setParams(model.getContent());
+            } else {
+                LOG.error(Messages.getString("RuntimeError.8", "model.params"));
+                throw new RuntimeException(Messages.getString("RuntimeError.8", "model.params"));
+            }
+            
+            if(containsTables(model.getTableName()) == false){
+            	table.getContent().setVersionField(null);
+            }
+            if(table.hasVersion()){
+            	Object value = queryCriteria.getVersion();
+            	if(null == value){
+            		throw new DalSqlException("Version is request.");
+            	}
+            }
+            
+            table.setQueryCriteria(queryCriteria);
+            
+            int result = _updateByCriteria(table);
+            if (cacheManager != null && useCache) {
+                String cacheKey = queryCriteria.getTable();
+                if (StringUtils.isNotBlank(model.getDatabase())) {
+                    cacheKey = CACHE_KEY_PREFIX + queryCriteria.getDatabase() + "#" + cacheKey;
+                }else{
+                	cacheKey = CACHE_KEY_PREFIX + cacheKey;
+                }
+                cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_CRITERIA);
+                cacheManager.getCache().clear(cacheKey + CACHE_KEY_COUNT_BY_CRITERIA);
+                cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_PRIMARY_KEY);
+            }
+            EventManager.getInstance().sendEvent(new EventContext(Method.UPDATE, false, model, queryCriteria));
+            return result;
+    	}
+    	return 0;
     }
 
     public abstract int _updateByCriteria(Table table);
@@ -507,10 +645,13 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 	}
 
     private int updateByPrimaryKey(Model model) {
+    	EventManager.getInstance().sendEvent(new EventContext(Method.UPDATE, true, model));
         if (router != null) {
             router.routeToMaster();
         }
         Table table = retrievalTableByModel(model);
+        LinkedHashMap<String, Object> params = new LinkedHashMap<String, Object>();
+        LinkedHashMap<String, Object> conditions = new LinkedHashMap<String, Object>();
         if (model != null && model.getContent() != null && model.getContent().size() > 0) {
         	if(isNoSql()){
         		if (null != model.getSinglePrimaryKey()) {
@@ -522,8 +663,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
                     model.getContent().put(names.get(0), model.getSinglePrimaryKey());
                 }
         	}
-            LinkedHashMap<String, Object> params = new LinkedHashMap<String, Object>();
-            LinkedHashMap<String, Object> conditions = new LinkedHashMap<String, Object>();
+            
             Iterator<String> iter = model.getContent().keySet().iterator();
             while (iter.hasNext()) {
                 String key = iter.next();
@@ -532,21 +672,25 @@ public abstract class AbstractBaseDAL implements BaseDAL {
                 	if(isNoSql()){
                 		params.put(key, value);
                 	}else{
-                		JavaType javaType = JavaTypeResolver.calculateJavaType(table.getField(key).getJdbcType());
-                        if (table.getPrimaryKey().getFields().contains(key)) {
-                        	conditions.put(key, JavaTypeConversion.convert(javaType, value));
-                        } else {
-                            params.put(key, JavaTypeConversion.convert(javaType, value));
-                        }
+                		Column column = table.getField(key);
+                		if(column != null){
+                			JavaType javaType = JavaTypeResolver.calculateJavaType(table.getField(key).getJdbcType());
+                            if (table.getPrimaryKey().getFields().contains(key)) {
+                            	conditions.put(key, JavaTypeConversion.convert(javaType, value));
+                            } else {
+                                params.put(key, JavaTypeConversion.convert(javaType, value));
+                            }
+                		}
                 	}
-                }else{
-                	params.put(key, null);
                 }
+            }
+            if(containsTables(model.getTableName()) == false){
+            	table.getContent().setVersionField(null);
             }
             if(table.hasVersion()){
             	Object value = model.getVersion();
             	if(null == value){
-            		throw new StaleObjectStateException("Version is request.");
+            		throw new DalSqlException("Version is request.");
             	}
             	conditions.put(version,  value);
             }
@@ -560,12 +704,33 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 
         if (cacheManager != null && useCache) {
             String cacheKey = model.getTableName();
-            if (StringUtils.isNotEmpty(model.getDatabase())) {
-                cacheKey = model.getDatabase() + "#" + cacheKey;
+            if (StringUtils.isNotBlank(model.getDatabase())) {
+                cacheKey = CACHE_KEY_PREFIX + model.getDatabase() + "#" + cacheKey;
+            }else{
+            	cacheKey = CACHE_KEY_PREFIX + cacheKey;
             }
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_CRITERIA);
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_COUNT_BY_CRITERIA);
+            cacheKey += CACHE_KEY_SELECT_BY_PRIMARY_KEY + model.getSinglePrimaryKey();
             cacheManager.getCache().clear(cacheKey);
+            /*Map<String, Object> value = (Map<String, Object>) cacheManager.getCache().getObject(cacheKey);
+            if (value != null && value.size() > 0) {
+            	for(Entry<String, Object> entry:params.entrySet()){
+        			if(entry.getKey().equals(version)){
+        				int vers = 0;
+        				if(entry.getValue() != null){
+        					vers = (Integer)entry.getValue();
+        				}
+        				value.put(entry.getKey(), vers+1);
+        			}else{
+        				value.put(entry.getKey(), entry.getValue());
+        			}
+            	}
+            	cacheManager.getCache().putObject(cacheKey, value);
+            }*/
         }
-
+        
+        EventManager.getInstance().sendEvent(new EventContext(Method.UPDATE, false, model));
         return result;
     }
     
@@ -604,6 +769,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
     }
 
     private int deleteByPrimaryKey(Model model) {
+    	EventManager.getInstance().sendEvent(new EventContext(Method.DELETE, true, model));
         if (router != null) {
             router.routeToMaster();
         }
@@ -633,11 +799,18 @@ public abstract class AbstractBaseDAL implements BaseDAL {
         int result = _deleteByPrimaryKey(table);
         if (cacheManager != null && useCache) {
             String cacheKey = model.getTableName();
-            if (StringUtils.isNotEmpty(model.getDatabase())) {
-                cacheKey = model.getDatabase() + "#" + cacheKey;
+            if (StringUtils.isNotBlank(model.getDatabase())) {
+                cacheKey = CACHE_KEY_PREFIX + model.getDatabase() + "#" + cacheKey;
+            }else{
+            	cacheKey = CACHE_KEY_PREFIX + cacheKey;
             }
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_CRITERIA);
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_COUNT_BY_CRITERIA);
+            cacheKey += CACHE_KEY_SELECT_BY_PRIMARY_KEY + model.getSinglePrimaryKey();
             cacheManager.getCache().clear(cacheKey);
         }
+        
+        EventManager.getInstance().sendEvent(new EventContext(Method.DELETE, false, model));
 
         return result;
     }
@@ -648,6 +821,7 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 
     @Override
     public int deleteByCriteria(QueryCriteria queryCriteria) {
+    	EventManager.getInstance().sendEvent(new EventContext(Method.DELETE, true, queryCriteria));
         if (router != null) {
             router.routeToMaster();
         }
@@ -657,10 +831,15 @@ public abstract class AbstractBaseDAL implements BaseDAL {
         if (cacheManager != null && useCache) {
             String cacheKey = queryCriteria.getTable();
             if (StringUtils.isNotEmpty(queryCriteria.getDatabase())) {
-                cacheKey = queryCriteria.getDatabase() + "#" + cacheKey;
+                cacheKey = CACHE_KEY_PREFIX + queryCriteria.getDatabase() + "#" + cacheKey;
+            }else{
+            	cacheKey = CACHE_KEY_PREFIX + cacheKey;
             }
-            cacheManager.getCache().clear(cacheKey);
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_CRITERIA);
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_COUNT_BY_CRITERIA);
+            cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_PRIMARY_KEY);
         }
+        EventManager.getInstance().sendEvent(new EventContext(Method.DELETE, true, queryCriteria));
         return result;
     }
 
@@ -698,12 +877,16 @@ public abstract class AbstractBaseDAL implements BaseDAL {
     }
 
     public void clearCache(String database, String tableName) {
-        String cacheKey = tableName;
+   	 String cacheKey = tableName;
         if (StringUtils.isNotEmpty(database)) {
-            cacheKey = database + "#" + cacheKey;
+            cacheKey = CACHE_KEY_PREFIX + database + "#" + cacheKey;
+        }else{
+        	cacheKey = CACHE_KEY_PREFIX + cacheKey;
         }
-        this.cacheManager.getCache().clear(cacheKey);
-    }
+       cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_CRITERIA);
+       cacheManager.getCache().clear(cacheKey + CACHE_KEY_COUNT_BY_CRITERIA);
+       cacheManager.getCache().clear(cacheKey + CACHE_KEY_SELECT_BY_PRIMARY_KEY);
+   }
     @Override
 	public QueryResult selectByCriteria(String[] fields, QueryCriteria queryCriteria) {
     	return selectByCriteria(Arrays.asList(fields), queryCriteria, PERSISTENT_CACHE);
@@ -714,7 +897,6 @@ public abstract class AbstractBaseDAL implements BaseDAL {
 	public QueryResult selectByCriteria(String[] fields, QueryCriteria queryCriteria, int seconds) {
 		return selectByCriteria(Arrays.asList(fields), queryCriteria, seconds);
 	}
-
     
 
     @Override
@@ -731,19 +913,62 @@ public abstract class AbstractBaseDAL implements BaseDAL {
     public int countByCriteria(QueryCriteria queryCriteria) {
         return countByCriteria(queryCriteria, PERSISTENT_CACHE);
     }
+    
+    public BaseDAL update(){
+    	if (router != null) {
+            router.routeToMaster();
+        }
+		return this;
+    	
+    }
+    public BaseDAL select(){
+    	if (router != null) {
+            router.routeToSlave();
+        }
+    	return this;
+    }
 
 	public void setUseCache(boolean useCache) {
 		this.useCache = useCache;
 	}
 
-	public String isVersion() {
-		return version;
-	}
-
 	public void setVersion(String version) {
 		this.version = version;
 	}
+
+	public void setVersionTables(List<String> versionTables) {
+		this.versionTables = versionTables;
+	}
 	
+	public boolean containsTables(String table){
+		if(versionTables == null){
+			return false;
+		}
+		return versionTables.contains(table);
+	}
+
+	public void setListenerNames(List<String> listenerNames) {
+		this.listenerNames = listenerNames;
+	}
 	
+	public void setNoCacheTables(List<String> noCacheTables) {
+		this.noCacheTables = noCacheTables;
+	}
+	
+	public void setTransactionalPackage(String transactionalPackage) {
+		this.transactionalPackage = transactionalPackage;
+	}
+
+	public void init(){
+		if(null != listenerNames && listenerNames.size() > 0){
+			for(String name:listenerNames){
+				//EventListener listener = (EventListener)ContextLoader.getCurrentWebApplicationContext().getBean(name);
+				EventListener listener = null;
+				if(null != listener){
+					EventManager.getInstance().addEventListener(listener);
+				}
+			}
+		}
+	}
 
 }

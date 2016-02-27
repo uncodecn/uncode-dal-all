@@ -39,6 +39,16 @@ public class Content implements Serializable {
     private Map<String, Column> fields;
     
     /**
+     * 索索列表
+     */
+    private Map<String, List<String>> indexs;
+    
+    /**
+     * 索索字段-名称对应
+     */
+    private Map<String, String> indexFields;
+    
+    /**
      * 主键
      */
     private PrimaryKey primaryKey;
@@ -51,6 +61,8 @@ public class Content implements Serializable {
     public Content(){
     	super();
         fields = new HashMap<String, Column>();
+        indexs = new HashMap<String, List<String>>();
+        indexFields = new HashMap<String, String>();
         primaryKey = new PrimaryKey();
     }
     
@@ -109,11 +121,11 @@ public class Content implements Serializable {
     }
     
     public void addPrimaryFieldName(String fieldName){
-        primaryKey.addFieldName(fieldName);
+        primaryKey.addFieldName(fieldName.toLowerCase());
     }
     
     public void addField(Column field){
-        this.fields.put(field.getFieldName(), field);
+        this.fields.put(field.getFieldName().toLowerCase(), field);
     }
     
     public String getColumns() {
@@ -143,6 +155,24 @@ public class Content implements Serializable {
 	public void setDatabase(String database) {
 		this.database = database;
 	}
+
+	public Map<String, List<String>> getIndexs() {
+		return indexs;
+	}
+
+	public void setIndexs(Map<String, List<String>> indexs) {
+		this.indexs = indexs;
+	}
+
+	public Map<String, String> getIndexFields() {
+		return indexFields;
+	}
+
+	public void setIndexFields(Map<String, String> indexFields) {
+		this.indexFields = indexFields;
+	}
+
+	
 	
 	
     

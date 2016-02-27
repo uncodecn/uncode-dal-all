@@ -16,4 +16,9 @@ public class DefaultMasterSlaveRouter implements MasterSlaveRouter {
 
 	}
 
+	@Override
+	public void routeToShard(String shard) {
+		DBContextHolder.swithTo(shard);
+	}
+
 }

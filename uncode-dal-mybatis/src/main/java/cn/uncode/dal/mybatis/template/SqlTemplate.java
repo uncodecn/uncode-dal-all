@@ -1,11 +1,14 @@
 package cn.uncode.dal.mybatis.template;
 
 
+import java.util.List;
+
 import org.apache.commons.lang3.StringUtils;
+
 import cn.uncode.dal.descriptor.Table;
 import cn.uncode.dal.jdbc.template.AbstractTemplate;
-import cn.uncode.dal.utils.ColumnWrapperUtils;
 import cn.uncode.dal.mybatis.resolver.MybatisJavaTypeResolver;
+import cn.uncode.dal.utils.ColumnWrapperUtils;
 
 public class SqlTemplate extends  AbstractTemplate{
     
@@ -59,15 +62,50 @@ public class SqlTemplate extends  AbstractTemplate{
     }
     protected String buildListParamSql(String prefix, String column, Table model, String keyword){
         StringBuffer sql = new StringBuffer();
-        sql.append(ColumnWrapperUtils.wrap(column)).append(" ").append(keyword).append(" (#{").append(prefix).append(".").append(column);
-        String javaType = model.getField(column).getFieldSql();
-        if(StringUtils.isEmpty(javaType)){
-            javaType = MybatisJavaTypeResolver.calculateJavaType(model.getField(column).getJdbcType());
+        
+        if("in".equals(keyword) || "not in".equals(keyword)){
+        	@SuppressWarnings("unchecked")
+			List<Object> values = (List<Object>)model.getConditions().get(column);
+        	int len = values.size();
+        	
+        	 String javaType = model.getField(column).getFieldSql();
+             if(StringUtils.isEmpty(javaType)){
+                 javaType = MybatisJavaTypeResolver.calculateJavaType(model.getField(column).getJdbcType());
+             }
+        	
+            StringBuffer myCol = new StringBuffer();
+            myCol.append(column).append("_");
+             
+        	sql.append(ColumnWrapperUtils.wrap(column)).append(" ").append(keyword).append(" (");
+        	
+        	for(int i = 0; i < len; i++){
+        		sql.append(" #{").append(prefix).append(".").append(column).append("_").append(i);
+        		if(StringUtils.isNotEmpty(javaType)){
+                    sql.append(",jdbcType=").append(javaType);
+                }
+                sql.append("}");
+                
+        		if((i+1) != len){
+        			sql.append(", ");
+        		}
+        		
+        		model.getConditions().put(myCol.toString()+i, values.get(i));
+        	}
+        	sql.append(") ");
+        	
+        }else{
+        	 sql.append(ColumnWrapperUtils.wrap(column)).append(" ").append(keyword).append(" (#{").append(prefix).append(".").append(column);
+             String javaType = model.getField(column).getFieldSql();
+             if(StringUtils.isEmpty(javaType)){
+                 javaType = MybatisJavaTypeResolver.calculateJavaType(model.getField(column).getJdbcType());
+             }
+             if(StringUtils.isNotEmpty(javaType)){
+                 sql.append(",jdbcType=").append(javaType);
+             }
+             sql.append("})");
         }
-        if(StringUtils.isNotEmpty(javaType)){
-            sql.append(",jdbcType=").append(javaType);
-        }
-        sql.append("})");
+        
+       
         return sql.toString();
     }
     

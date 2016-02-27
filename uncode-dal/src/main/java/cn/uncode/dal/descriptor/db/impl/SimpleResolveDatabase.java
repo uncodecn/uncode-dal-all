@@ -12,7 +12,9 @@ import java.util.concurrent.ConcurrentMap;
 import javax.sql.DataSource;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import cn.uncode.dal.cache.CacheManager;
 import cn.uncode.dal.descriptor.Column;
 import cn.uncode.dal.descriptor.Content;
@@ -23,7 +25,7 @@ import cn.uncode.dal.internal.util.message.Messages;
 
 public class SimpleResolveDatabase implements ResolveDataBase{
     
-    private static final Logger LOG = Logger.getLogger(SimpleResolveDatabase.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SimpleResolveDatabase.class);
     
     private static final ConcurrentMap<Object, Object> cache = new ConcurrentHashMap<Object, Object>();
     
@@ -61,6 +63,7 @@ public class SimpleResolveDatabase implements ResolveDataBase{
         boolean tableExist = false;
         ResultSet pkRS = null;
         ResultSet columnsRS = null;
+        ResultSet indexRS = null;
         try {
             DatabaseMetaData databaseMetaData = dataSource.getConnection().getMetaData();
             //primary keys
@@ -90,6 +93,22 @@ public class SimpleResolveDatabase implements ResolveDataBase{
                 }
                 content.addField(field);
                 tableExist = true;
+            }
+          //indexs
+          indexRS = databaseMetaData.getIndexInfo(null, null, tableName, false, false);
+          while (indexRS.next()) {
+        	  String indexName = indexRS.getString("INDEX_NAME");//索引的名称  
+        	  if(!"PRIMARY".equals(indexName)){
+        		  String columnName = indexRS.getString("COLUMN_NAME");//列名  
+        		  if(content.getIndexs().containsKey(indexName)){
+        			  content.getIndexs().get(indexName).add(columnName);
+        		  }else{
+        			  List<String> list = new ArrayList<String>();
+        			  list.add(columnName);
+        			  content.getIndexs().put(indexName, list);
+        		  }
+        		  content.getIndexFields().put(columnName, indexName);
+        	  }
             }
         } catch (SQLException e) {
             LOG.error(Messages.getString("RuntimeError.2"), e);

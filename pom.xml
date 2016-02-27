@@ -4,7 +4,7 @@
 
   	<groupId>cn.uncode</groupId>
   	<artifactId>uncode-dal-root</artifactId>
-  	<version>1.0.4</version>
+  	<version>1.0.6</version>
   	<packaging>pom</packaging>
 
   
@@ -21,7 +21,7 @@
 
 	<developers>
 		<developer>
-			<name>uncode</name>
+			<name>yeweijun</name>
 			<email>ywj_316@qq.com</email>
 			<url>http://www.uncode.cn</url>
 			<timezone>+8</timezone>
@@ -40,14 +40,22 @@
 		<version.compiler-plugin>3.1</version.compiler-plugin>
 		<version.source-plugin>2.3</version.source-plugin>
 		<version.javadoc-plugin>2.9.1</version.javadoc-plugin>
-		<version.maven-gpg-plugin>1.5</version.maven-gpg-plugin>
+		<version.gpg-plugin>1.5</version.gpg-plugin>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<jdk.version>1.7</jdk.version>
 		<spring.version>3.2.0.RELEASE</spring.version>
-		<jackson.version>2.2.2</jackson.version>
+		<jackson.version>2.4.1</jackson.version>
 		<log4j.version>1.2.16</log4j.version>
 		<junit.version>4.8.1</junit.version>
+		<mysql.version>5.1.23</mysql.version>
+		<slf4j.version>1.6.4</slf4j.version>
+		<lang3.version>3.1</lang3.version>
+		<beanutils.version>1.9.2</beanutils.version>
+		<mongo.version>3.0.4</mongo.version>
+		<uncode.version>1.0.6</uncode.version>
+		<mybatis.version>3.2.2</mybatis.version>
+		<mybatis.spring.version>1.1.1</mybatis.spring.version>
 	</properties>
 	
 	<modules>
@@ -57,13 +65,24 @@
 		<module>uncode-dal-mongo</module>
 	</modules>
   
+	<distributionManagement>
+	  	<snapshotRepository>
+	   		<id>uncode</id>
+	    	<url>https://oss.sonatype.org/content/repositories/snapshots</url>
+	  	</snapshotRepository>
+	  	<repository>
+	    	<id>uncode</id>
+	    	<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+	  	</repository>
+	</distributionManagement>
+  
 	<build>
 		<plugins>
 			<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
-					<source>1.7</source>
-					<target>1.7</target>
+					<source>${jdk.version}</source>
+					<target>${jdk.version}</target>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -72,7 +91,6 @@
 				<version>${version.source-plugin}</version>
 				<executions>
 					<execution>
-						<id>attach-sources</id>
 						<goals>
 							<goal>jar-no-fork</goal>
 						</goals>
@@ -104,84 +122,78 @@
 	</build>
 
 	<profiles>
-		<profile>
-			<id>release</id>
-			<build>
-				<plugins>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+					
+                    <!-- Compiler -->	
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-source-plugin</artifactId>
-						<version>${version.source-plugin}</version>
-						<executions>
-							<execution>
-								<id>attach-sources</id>
-								<goals>
-									<goal>jar-no-fork</goal>
-								</goals>
-							</execution>
-						</executions>
+						<artifactId>maven-compiler-plugin</artifactId>
+						<version>${version.compiler-plugin}</version>
 						<configuration>
-							<attach>true</attach>
+							<source>${jdk.version}</source>
+							<target>${jdk.version}</target>
 						</configuration>
 					</plugin>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-javadoc-plugin</artifactId>
-						<version>${version.javadoc-plugin}</version>
-						<executions>
-							<execution>
-								<phase>package</phase>
-								<goals>
-									<goal>jar</goal>
-								</goals>
-							</execution>
-						</executions>
-						<configuration>
-							<links>
-								<link>http://docs.oracle.com/javase/7/docs/api</link>
-							</links>
-						</configuration>
-					</plugin>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-gpg-plugin</artifactId>
-						<version>${version.maven-gpg-plugin}</version>
-						<executions>
-							<execution>
-								<phase>install</phase>
-								<goals>
-									<goal>sign</goal>
-								</goals>
-							</execution>
-						</executions>
-					</plugin>
-				</plugins>
-			</build>
-			<!--  distributionManagement>
-				<snapshotRepository>
-					<id>uncode</id>
-					<url>https://oss.sonatype.org/content/repositories/snapshots/</url>
-				</snapshotRepository>
-				<repository>
-					<id>uncode</id>
-					<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-				</repository>
-			</distributionManagement -->
-			<distributionManagement>
-		        <repository>
-		            <id>nexus-releases</id>
-		            <name>Nexus Release Repository</name>
-		            <url>http://192.168.1.10:8081/nexus/content/repositories/thirdparty/</url>
-		        </repository>
-		        <snapshotRepository>
-		            <id>nexus-snapshots</id>
-		            <name>Nexus Snapshot Repository</name>
-		            <url>http://192.168.1.10:8081/nexus/content/repositories/thirdparty/</url>
-		        </snapshotRepository>
-		    </distributionManagement>
-		</profile>
-	</profiles>
-    
+                    <!-- Source -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${version.source-plugin}</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Javadoc -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${version.javadoc-plugin}</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- GPG -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${version.gpg-plugin}</version>
+                        <executions>
+                            <execution>
+								<id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+            <distributionManagement>
+                <snapshotRepository>
+                    <id>uncode</id>
+                    <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
+                </snapshotRepository>
+                <repository>
+                    <id>uncode</id>
+                    <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+                </repository>
+            </distributionManagement>
+        </profile>
+    </profiles>
     
   
 </project>

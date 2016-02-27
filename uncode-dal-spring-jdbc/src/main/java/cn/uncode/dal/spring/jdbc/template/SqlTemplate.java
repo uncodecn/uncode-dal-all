@@ -1,6 +1,8 @@
 package cn.uncode.dal.spring.jdbc.template;
 
 
+import java.util.List;
+
 import org.apache.commons.lang3.StringUtils;
 
 import cn.uncode.dal.descriptor.Table;
@@ -31,7 +33,23 @@ public class SqlTemplate extends  AbstractTemplate{
     }
     protected String buildListParamSql(String prefix, String column, Table model, String keyword){
         StringBuffer sql = new StringBuffer();
-        sql.append(ColumnWrapperUtils.wrap(column)).append(" ").append(keyword).append(" (?) ");
+        
+        if("in".equals(keyword) || "not in".equals(keyword)){
+        	@SuppressWarnings("unchecked")
+			List<Object> values = (List<Object>)model.getConditions().get(column);
+        	int len = values.size();
+        	sql.append(ColumnWrapperUtils.wrap(column)).append(" ").append(keyword).append(" (");
+        	for(int i = 0; i < len; i++){
+        		sql.append("?");
+        		if((i+1) != len){
+        			sql.append(", ");
+        		}
+        	}
+        	sql.append(") ");
+        }else{
+        	sql.append(ColumnWrapperUtils.wrap(column)).append(" ").append(keyword).append(" (?) ");
+        }
+        
         return sql.toString();
     }
 	

@@ -3,6 +3,8 @@ package cn.uncode.dal.core;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.jdbc.core.JdbcTemplate;
+
 import cn.uncode.dal.criteria.QueryCriteria;
 import cn.uncode.dal.descriptor.QueryResult;
 
@@ -51,6 +53,10 @@ public interface BaseDAL {
     
     int countByCriteria(QueryCriteria queryCriteria, int seconds);
     
+    int countByCriteria(List<String> fields, QueryCriteria queryCriteria);
+    
+    int countByCriteria(List<String> fields, QueryCriteria queryCriteria, int seconds);
+    
     //-------------------------
   	// selectByPrimaryKey
   	//-------------------------
@@ -93,6 +99,12 @@ public interface BaseDAL {
     
     Object insert(String database, String table, Map<String, Object> obj);
     
+    void asynInsert(Object obj);
+    
+    void asynInsert(String table, Map<String, Object> obj);
+    
+    void asynInsert(String database, String table, Map<String, Object> obj);
+    
     //-------------------------
   	// update
   	//-------------------------
@@ -130,9 +142,10 @@ public interface BaseDAL {
     
     void clearCache(String database, String tableName);
     
-    public Object getTemplate();
+    public JdbcTemplate getTemplate();
     
-
+    public BaseDAL update();
+    public BaseDAL select();
     
     
 }

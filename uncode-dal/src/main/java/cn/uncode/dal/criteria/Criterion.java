@@ -2,11 +2,13 @@ package cn.uncode.dal.criteria;
 
 import java.util.List;
 
+import org.apache.commons.lang3.StringUtils;
+
 public class Criterion {
     
     private String column;
     
-    private Integer condition;
+    private Condition condition;
     
     private Object value;
 
@@ -22,7 +24,7 @@ public class Criterion {
 
     private String typeHandler;
 
-    public Integer getCondition() {
+    public Condition getCondition() {
         return condition;
     }
 
@@ -59,7 +61,7 @@ public class Criterion {
     }
 
 
-    public Criterion(Integer condition, Object value, String typeHandler, String column) {
+    public Criterion(Condition condition, Object value, String typeHandler, String column) {
         super();
         this.condition = condition;
         this.value = value;
@@ -79,15 +81,15 @@ public class Criterion {
         this(null, null, null, sql);
     }
     
-    public Criterion(Integer condition, String column) {
+    public Criterion(Condition condition, String column) {
         this(condition, null, null, column);
     }
 
-    public Criterion(Integer condition, Object value, String column) {
+    public Criterion(Condition condition, Object value, String column) {
         this(condition, value, null, column);
     }
 
-    public Criterion(Integer condition, Object value, Object secondValue, String typeHandler, String column) {
+    public Criterion(Condition condition, Object value, Object secondValue, String typeHandler, String column) {
         super();
         this.condition = condition;
         this.value = value;
@@ -96,7 +98,7 @@ public class Criterion {
         this.betweenValue = true;
     }
 
-    public Criterion(Integer condition, Object value, Object secondValue, String column) {
+    public Criterion(Condition condition, Object value, Object secondValue, String column) {
         this(condition, value, secondValue, null, column);
     }
     
@@ -115,22 +117,57 @@ public class Criterion {
         return result;
     }
     
-    public static class Condition{
+    public String toString(){
+    	StringBuffer sb = new StringBuffer();
+    	if(StringUtils.isNotEmpty(column)){
+    		sb.append("column:").append(column).append(",");
+    	}
+    	if(null != condition){
+    		sb.append("condition:").append(condition).append(",");
+    	}
+    	if(null != value){
+    		sb.append("value:").append(value).append(",");
+    	}
+    	if(null != secondValue){
+    		sb.append("secondValue:").append(secondValue).append(",");
+    	}
+    	if(StringUtils.isNotEmpty(typeHandler)){
+    		sb.append("typeHandler:").append(typeHandler).append(",");
+    	}
+    	sb.append("noValue:").append(noValue).append(",");
+    	sb.append("singleValue:").append(singleValue).append(",");
+    	sb.append("betweenValue:").append(betweenValue).append(",");
+    	sb.append("listValue:").append(listValue).append(",");
+    	sb.deleteCharAt(sb.lastIndexOf(","));
+    	
+    	return sb.toString();
+    }
+    
+    public enum Condition{
+        IS_NULL(1),
+        IS_NOT_NULL(2),
+        EQUAL(3),
+        NOT_EQUAL(4),
+        GREATER_THAN(5),
+        GREATER_THAN_OR_EQUAL(6),
+        LESS_THAN(7),
+        LESS_THAN_OR_EQUAL(8),
+        LIKE(9),
+        NOT_LIKE(10),
+        IN(11),
+        NOT_IN(12),
+        BETWEEN(13),
+        NOT_BETWEEN(14),
+        SQL(15);
         
-        public static final int IS_NULL = 1;
-        public static final int IS_NOT_NULL = 2;
-        public static final int EQUAL = 3;
-        public static final int NOT_EQUAL = 4;
-        public static final int GREATER_THAN = 5;
-        public static final int GREATER_THAN_OR_EQUAL = 6;
-        public static final int LESS_THAN = 7;
-        public static final int LESS_THAN_OR_EQUAL = 8;
-        public static final int LIKE = 9;
-        public static final int NOT_LIKE = 10;
-        public static final int IN = 11;
-        public static final int NOT_IN = 12;
-        public static final int BETWEEN = 13;
-        public static final int NOT_BETWEEN = 14;
+        public final int type;
+        Condition(int type){
+        	this.type = type;
+        }
+        
+        public int getType(){
+        	return this.type;
+        }
        
     }
 

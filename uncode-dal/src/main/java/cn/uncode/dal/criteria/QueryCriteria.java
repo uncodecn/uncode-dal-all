@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
+
 import cn.uncode.dal.criteria.Criterion.Condition;
 
 
@@ -25,12 +26,14 @@ public class QueryCriteria {
     
     private int pageIndex = 1;
     
-    private int pageSize = 10;
+    private int pageSize = 15;
     
     private int recordIndex = 0;
     
+    private int limit;
+    
     private Object version;
-
+    
     public QueryCriteria() {
         oredCriteria = new ArrayList<Criteria>();
     }
@@ -55,7 +58,7 @@ public class QueryCriteria {
         this.distinct = distinct;
     }
 
-    public boolean isDistinct() {
+    public boolean getDistinct() {
         return distinct;
     }
     
@@ -68,6 +71,7 @@ public class QueryCriteria {
     }
 
     public int getPageSize() {
+    	
         return pageSize;
     }
 
@@ -105,6 +109,14 @@ public class QueryCriteria {
 
 	public void setRecordIndex(int recordIndex) {
 		this.recordIndex = recordIndex;
+	}
+
+	public int getLimit() {
+		return limit;
+	}
+
+	public void setLimit(int limit) {
+		this.limit = limit;
 	}
 
 	public void setTable(Class<?> clazz) {
@@ -163,10 +175,11 @@ public class QueryCriteria {
         result = prime * result + ((database == null) ? 0 : database.hashCode());
         result = prime * result + ((table == null) ? 0 : table.hashCode());
         result = prime * result + ((version == null) ? 0 : version.hashCode());
+        result = prime * result + ((groupBy == null) ? 0 : groupBy.hashCode());
         result = prime * result + (distinct ? 1231 : 1237);
         result = prime * result + (selectOne ? 1231 : 1237);
-        result = prime * result + (selectOne ? 1231 : 1237);
         result = prime * result + pageIndex + pageSize;
+        result = prime * result + recordIndex + limit;
         if (oredCriteria != null) {
             for (Criteria criteria : oredCriteria) {
                 for (Criterion cter : criteria.getAllCriteria()) {
@@ -175,6 +188,36 @@ public class QueryCriteria {
             }
         }
         return result;
+    }
+    
+    public String toString(){
+    	StringBuffer sb = new StringBuffer();
+    	if(StringUtils.isNotEmpty(database)){
+    		sb.append("database:").append(database).append(",");
+    	}
+    	if(StringUtils.isNotEmpty(table)){
+    		sb.append("table:").append(table).append(",");
+    	}
+    	if(StringUtils.isNotEmpty(orderByClause)){
+    		sb.append("orderByClause:").append(orderByClause).append(",");
+    	}
+    	if(StringUtils.isNotEmpty(groupBy)){
+    		sb.append("groupBy:").append(groupBy).append(",");
+    	}
+    	sb.append("distinct:").append(distinct).append(",");
+    	if(null != oredCriteria){
+    		sb.append("oredCriteria:").append(oredCriteria).append(",");
+    	}
+    	sb.append("selectOne:").append(selectOne).append(",");
+    	sb.append("pageIndex:").append(pageIndex).append(",");
+    	sb.append("pageSize:").append(pageSize).append(",");
+    	sb.append("recordIndex:").append(recordIndex).append(",");
+    	if(null != version){
+    		sb.append("version:").append(version).append(",");
+    	}
+    	sb.deleteCharAt(sb.lastIndexOf(","));
+        
+    	return sb.toString();
     }
 
     protected abstract static class GeneratedCriteria {
@@ -204,21 +247,21 @@ public class QueryCriteria {
             criteria.add(new Criterion(sql));
         }
         
-        protected void addCriterion(Integer condition, String column) {
+        protected void addCriterion(Condition condition, String column) {
             if (condition == null || StringUtils.isEmpty(column)) {
                 throw new RuntimeException("Column for condition cannot be null");
             }
             criteria.add(new Criterion(condition, column));
         }
         
-        protected void addCriterion(Integer condition, Object value, String typeHandler, String column) {
+        protected void addCriterion(Condition condition, Object value, String typeHandler, String column) {
             if (value == null || condition == null || StringUtils.isEmpty(column)) {
                 throw new RuntimeException("Value for condition cannot be null");
             }
             criteria.add(new Criterion(condition, value, typeHandler, column));
         }
 
-        protected void addCriterion(Integer condition, Object value1, Object value2, String typeHandler, String column) {
+        protected void addCriterion(Condition condition, Object value1, Object value2, String typeHandler, String column) {
             if (value1 == null || value2 == null) {
                 throw new RuntimeException("Between values for " + column + " cannot be null");
             }
@@ -282,7 +325,7 @@ public class QueryCriteria {
             return (Criteria) this;
         }
 
-        public Criteria andColumnIn(String column, List<Object> values) {
+        public Criteria andColumnIn(String column, List<?> values) {
         	if(null != values && values.size() > 0){
         		addCriterion(Condition.IN, values, values.getClass().getName(), column);
         	}
@@ -322,11 +365,69 @@ public class QueryCriteria {
 
     }
 
-    public static class Criteria extends GeneratedCriteria {
+    public class Criteria extends GeneratedCriteria {
 
         protected Criteria() {
             super();
         }
+        /**
+         * 快速封装查询条件
+         * @param condition Condition条件枚举
+         * @param filed 字段
+         * @param value 值
+         * @return
+         */
+        public Criteria append(Condition condition, String filed, Object value){
+        	if(condition == Condition.EQUAL){
+        		andColumnEqualTo(filed, value);
+    		}else if(condition == Condition.NOT_EQUAL){
+    			andColumnNotEqualTo(filed, value);
+    		}else if(condition == Condition.GREATER_THAN){
+    			andColumnGreaterThan(filed, value);
+    		}else if(condition == Condition.GREATER_THAN_OR_EQUAL){
+    			andColumnGreaterThanOrEqualTo(filed, value);
+    		}else if(condition == Condition.LESS_THAN){
+    			andColumnLessThan(filed, value);
+    		}else if(condition == Condition.LESS_THAN_OR_EQUAL){
+    			andColumnLessThanOrEqualTo(filed, value);
+    		}else if(condition == Condition.LIKE){
+    			andColumnLike(filed, value);
+    		}else if(condition == Condition.SQL){
+    			andColumnSql(value.toString());
+    		}else{
+    			andColumnEqualTo(filed, value);
+    		}
+        	return this;
+        }
+        
+        /**
+         * 快速封装查询条件
+         * @param filed 字段
+         * @param value 值
+         * @return
+         */
+        public Criteria append(String filed, Object value){
+        	return append(Condition.EQUAL, filed, value);
+        }
+        
+        /**
+         * 快速封装sql查询条件
+         * @param sql sql片段
+         * @return
+         */
+        public Criteria append(String sql){
+        	return append(Condition.SQL, null, sql);
+        }
+        
+        public String toString(){
+        	if(null != criteria){
+        		return criteria.toString();
+        	}
+        	return null;
+        }
     }
+    
+    
+    
 
 }

@@ -47,9 +47,9 @@
 
     <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">  
 		<property name="driverClassName" value="com.mysql.jdbc.Driver"></property>  
-		<property name="url" value="jdbc:mysql://172.16.30.98:3306/appstore_db?characterEncoding=utf8"></property>  
+		<property name="url" value="jdbc:mysql://192.168.1.18:3306/ksudi_new?characterEncoding=utf8"></property>  
 		<property name="username" value="root"></property>  
-		<property name="password" value="root"></property>
+		<property name="password" value="123456"></property>
 	</bean>
 	
 	<bean id="dynamicDataSource" class="cn.uncode.dal.datasource.DynamicDataSource">
@@ -66,8 +66,19 @@
         <property name="standbyDataSource" ref="dataSource" />
     </bean>
 	
-	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">  
+	<!-- <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">  
          <property name="dataSource" ref="dynamicDataSource" /> 
+    </bean> -->
+    
+    <bean id="transactionManager" class="cn.uncode.dal.internal.shards.transaction.MultiDataSourcesTransactionManager">
+        <property name="dataSources">
+            <list>
+                <ref local="lazyConnectionDataSource_1"/>
+                <ref local="lazyConnectionDataSource_2"/>
+                <ref local="lazyConnectionDataSource_3"/>
+                <ref local="lazyConnectionDataSource_h2"/>
+            </list>
+        </property>
     </bean>
 	
 	<bean id="cacheManager" class="cn.uncode.dal.cache.support.SimpleCacheManager"></bean>
@@ -86,6 +97,7 @@
         <property name="commonJdbcSupport" ref="commonJdbcSupport" />
         <property name="resolveDatabase" ref="resolveDatabase" />
     </bean>
+    
     
     
 

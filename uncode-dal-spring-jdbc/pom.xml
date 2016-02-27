@@ -5,21 +5,21 @@
   <parent>
     <groupId>cn.uncode</groupId>
     <artifactId>uncode-dal-root</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.6</version>
   </parent>
   <artifactId>uncode-dal-spring-jdbc</artifactId>
   <packaging>jar</packaging>
   <name>uncode-dal-spring-jdbc</name>
-  <url>http://maven.apache.org</url>
  
   <dependencies>
   
         <dependency>
             <groupId>cn.uncode</groupId>
             <artifactId>uncode-dal</artifactId>
-            <version>1.0.3</version>
+            <version>1.0.6</version>
         </dependency>
         
    </dependencies>
+ 
  
 </project>

@@ -7,11 +7,12 @@ import java.util.Date;
 import java.util.Locale;
 
 import org.apache.commons.lang3.math.NumberUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class JavaTypeConversion {
 	
-	private static final Logger LOG = Logger.getLogger(JavaTypeConversion.class);
+	private static final Logger LOG = LoggerFactory.getLogger(JavaTypeConversion.class);
 	
 	private static final SimpleDateFormat[] formats = new SimpleDateFormat[] {
     	new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy", Locale.US),
@@ -51,7 +52,7 @@ public class JavaTypeConversion {
 				        fmtFlag = true;
 				        break;
 				    } catch (ParseException e) {
-				    	LOG.error("时间格式转换失败format:" + format.toPattern());
+				    	LOG.debug("时间格式转换失败format:" + format.toPattern());
 				    }
 				}
 				if (!fmtFlag) {// 如果格式没转换成功 尝试毫秒值转换
@@ -68,8 +69,12 @@ public class JavaTypeConversion {
 	        }
         }else if (JavaType.INTEGER == type) {
         	if(valueObj instanceof String){
-        		String[] vals = valueObj.toString().split("\\.");
-                result = Integer.valueOf(vals[0]);
+        		if(((String) valueObj).indexOf("=") == -1){
+        			String[] vals = valueObj.toString().split("\\.");
+                    result = Integer.valueOf(vals[0]);
+        		}else{
+        			result = valueObj;
+        		}
 			}else if(valueObj instanceof Float || valueObj instanceof Double){
 				result = (Integer)valueObj;
 			}else{

@@ -5,13 +5,12 @@
   <parent>
     <groupId>cn.uncode</groupId>
     <artifactId>uncode-dal-root</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.6</version>
   </parent>
   
   <artifactId>uncode-dal-mongo</artifactId>
   
   <name>uncode-dal-mongo</name>
-  <url>http://maven.apache.org</url>
   
   
   <dependencies>
@@ -19,7 +18,7 @@
   		<dependency>
             <groupId>cn.uncode</groupId>
             <artifactId>uncode-dal</artifactId>
-            <version>1.0.3</version>
+            <version>1.0.6</version>
         </dependency>
         
         <!-- =================================================== -->
@@ -28,13 +27,13 @@
   		<dependency>
           <groupId>org.mongodb</groupId>
           <artifactId>mongo-java-driver</artifactId>
-          <version>2.10.1</version>
+          <version>${mongo.version}</version>
         </dependency>
         
         <dependency>
             <groupId>org.jongo</groupId>
             <artifactId>jongo</artifactId>
-            <version>1.0</version>
+            <version>1.2</version>
         </dependency>
         
         <!-- ==================== -->
@@ -53,4 +52,6 @@
         </dependency>
 
   </dependencies>
+  
+
 </project>

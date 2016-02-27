@@ -11,5 +11,11 @@ public interface MongoDB {
 
 
 	DB getDB(String username, String password) throws MongoException;
+	
+	
+	com.mongodb.client.MongoDatabase getMongoDB() throws MongoException;
+
+
+	com.mongodb.client.MongoDatabase getMongoDB(String username, String password) throws MongoException;
 
 }

@@ -7,27 +7,28 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.bson.types.ObjectId;
+import org.jongo.Find;
+import org.jongo.FindOne;
+import org.jongo.Jongo;
 
-import cn.uncode.dal.core.AbstractBaseDAL;
-import cn.uncode.dal.core.BaseDAL;
+import cn.uncode.dal.core.AbstractMongoDAL;
 import cn.uncode.dal.criteria.Criterion;
 import cn.uncode.dal.criteria.QueryCriteria;
 import cn.uncode.dal.criteria.QueryCriteria.Criteria;
 import cn.uncode.dal.descriptor.Table;
 import cn.uncode.dal.utils.JsonUtils;
 
-import org.jongo.Find;
-import org.jongo.FindOne;
-import org.jongo.Jongo;
-
+import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DB;
+import com.mongodb.DBObject;
 import com.mongodb.MongoException;
 
-public class MongoDAL extends AbstractBaseDAL implements BaseDAL {
+public class MongoDAL extends AbstractMongoDAL implements cn.uncode.dal.core.MongoDAL {
 	
-	private static final Logger LOG = Logger.getLogger(MongoDAL.class);
+	private static final Logger LOG = LoggerFactory.getLogger(MongoDAL.class);
 	
 	private MongoDB database;
 
@@ -338,14 +339,34 @@ public class MongoDAL extends AbstractBaseDAL implements BaseDAL {
     }
 
 	@Override
-	public boolean isNoSql() {
-		return true;
-	}
-
-	@Override
 	public Object getTemplate() {
 		DB db = database.getDB();
 		return new Jongo(db);
 	}
+
+	public void runScript(String script) {
+        //有个格式化的作用
+        try {
+        	DB db = database.getDB();
+            db.command(buildCommand(script));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 构建command命令
+     *
+     * @param script
+     * @return
+     */
+    private DBObject buildCommand(String script) {
+        return BasicDBObjectBuilder.start()
+                .add("$eval", script)
+                .add("nolock", true)
+                .get();
+    }
+
+
 
 }

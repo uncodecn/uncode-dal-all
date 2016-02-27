@@ -4,12 +4,13 @@ import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import cn.uncode.dal.cache.Cache;
 
 public class ConcurrentMapCache implements Cache {
 	
-	private static final Logger LOG = Logger.getLogger(ConcurrentMapCache.class);
+	private static final Logger LOG = LoggerFactory.getLogger(ConcurrentMapCache.class);
 
     private static final ConcurrentMap<Object, Object> cache = new ConcurrentHashMap<Object, Object>();
 

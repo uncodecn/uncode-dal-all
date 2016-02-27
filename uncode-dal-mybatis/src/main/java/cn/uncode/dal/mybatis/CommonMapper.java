@@ -23,7 +23,7 @@ public interface CommonMapper{
      * @return
      */
     @SelectProvider(method = "selectByCriteria", type = SqlTemplate.class)
-    @ResultType(value = Map.class)
+    @ResultType(value = List.class)
     List<Map<String, Object>> selectByCriteria(Table model);
     
     /**
@@ -32,10 +32,18 @@ public interface CommonMapper{
      * @param model
      * @return
      */
-    //@SelectKey(statement="call identity()", keyProperty="id", before=false, resultType=int.class)
     @InsertProvider(method = "insert", type = SqlTemplate.class)
     @SelectKey(before=false,keyProperty="params.id",resultType=Object.class,statementType=StatementType.STATEMENT,statement="SELECT LAST_INSERT_ID() AS id")
     int insert(Table model);
+    
+    /**
+     * 新增
+     * 所有字段传入 model.params,不能为空
+     * @param model
+     * @return
+     */
+    @InsertProvider(method = "insert", type = SqlTemplate.class)
+    int insertWithId(Table model);
     
     /**
      * 条件删除

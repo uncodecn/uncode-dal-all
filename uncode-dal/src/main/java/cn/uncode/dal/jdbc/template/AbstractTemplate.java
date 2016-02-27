@@ -1,6 +1,7 @@
 package cn.uncode.dal.jdbc.template;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,7 +9,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import cn.uncode.dal.criteria.Criterion;
 import cn.uncode.dal.criteria.Criterion.Condition;
@@ -17,23 +19,24 @@ import cn.uncode.dal.criteria.QueryCriteria.Criteria;
 import cn.uncode.dal.descriptor.Column;
 import cn.uncode.dal.descriptor.Table;
 import cn.uncode.dal.descriptor.resolver.FieldSqlGenerator;
-import cn.uncode.dal.descriptor.resolver.JavaType;
-import cn.uncode.dal.descriptor.resolver.JavaTypeResolver;
-import cn.uncode.dal.exception.StaleObjectStateException;
+import cn.uncode.dal.exception.DalSqlException;
 import cn.uncode.dal.jdbc.SQL;
 import cn.uncode.dal.utils.ColumnWrapperUtils;
 import cn.uncode.dal.utils.VersionWrapperUtils;
 
 
 public abstract class AbstractTemplate {
-    private static final Logger LOG = Logger.getLogger(AbstractTemplate.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractTemplate.class);
     
     /**
      * 根据查询条件成生sql
      * @param sql sql
      * @param model table
      */
-    protected void caculationQueryCriteria(SQL sql, Table model){
+    protected String caculationQueryCriteria(SQL sql, Table model){
+    	String indexNameOk = null;
+    	String indexName = null;
+    	List<String> indexFD = new ArrayList<String>();
         List<Criteria> criterias = model.getQueryCriteria().getOredCriteria();
         if(criterias != null && criterias.size() > 0){
             for(Criteria criteria:criterias){
@@ -42,13 +45,42 @@ public abstract class AbstractTemplate {
                     List<Criterion> criterions = criteria.getCriteria();
                     for(Criterion criterion:criterions){
                         sql.AND(); sql.WHERE(convertCondition(criterion, model));
+                        if(StringUtils.isEmpty(indexNameOk)){
+                        	if(model.getContent().getIndexFields().containsKey(criterion.getColumn())){
+                            	indexName = model.getContent().getIndexFields().get(criterion.getColumn());
+                            	List<String> fields = model.getContent().getIndexs().get(indexName);
+                            	if(fields.size() == 1){
+                            		indexNameOk = indexName;
+                            	}else{
+                            		indexFD.add(criterion.getColumn());
+                            	}
+                            }
+                        }
                     }
                 }
             }
         }else{
             sql.AND(); sql.WHERE("1=2");
         }
-        
+        if(StringUtils.isEmpty(indexNameOk)){
+        	List<String> fields = model.getContent().getIndexs().get(indexName);
+        	boolean ok = true;
+        	for(int i=0;i<indexFD.size();i++){
+        		String fd1 = null;
+        		String fd2 = indexFD.get(i);
+        		try {
+        			fd1 = fields.get(i);
+				} catch (Exception e) {}
+        		if(!fd2.equals(fd1)){
+        			ok = false;
+        			break;
+        		}
+        	}
+        	if(ok){
+        		indexNameOk = indexName;
+        	}
+        }
+        return indexNameOk;
     }
     
     protected void caculationPrimaryKey(SQL sql, Table model){
@@ -91,25 +123,20 @@ public abstract class AbstractTemplate {
                 conditionStr = buildSingleParamSql(FieldSqlGenerator.CONDITION_PREFIX, criterion.getColumn(), criterion.getColumn()+"Max", model, "<=");
                 model.putCondition(criterion.getColumn()+"Max", criterion.getValue());
             }else if(Condition.IN == criterion.getCondition()){
-                List<Object> values = (List<Object>) criterion.getValue();
-                StringBuffer sb = new StringBuffer();
-                for(Object value:values){
-                    sb.append(value).append(",");
-                }
-                if(sb.length() > 0){
-                	conditionStr = buildListParamSql(FieldSqlGenerator.CONDITION_PREFIX, criterion.getColumn(), model, "in");
-                    model.putCondition(criterion.getColumn(),  sb.deleteCharAt(sb.lastIndexOf(",")).toString());
-                }
+                @SuppressWarnings("unchecked")
+				List<Object> values = (List<Object>) criterion.getValue();
+            	if(values.size()>0){
+            		model.putCondition(criterion.getColumn(), criterion.getValue());
+            		conditionStr = buildListParamSql(FieldSqlGenerator.CONDITION_PREFIX, criterion.getColumn(), model, "in");
+            	}
+                
             }else if(Condition.NOT_IN == criterion.getCondition()){
+            	@SuppressWarnings("unchecked")
                 List<Object> values = (List<Object>) criterion.getValue();
-                StringBuffer sb = new StringBuffer();
-                for(Object value:values){
-                    sb.append(value).append(",");
-                }
-                if(sb.length() > 0){
-                	conditionStr = buildListParamSql(FieldSqlGenerator.CONDITION_PREFIX, criterion.getColumn(), model, "not in");
-                    model.putCondition(criterion.getColumn(),  sb.deleteCharAt(sb.lastIndexOf(",")).toString());
-                }
+                if(values.size()>0){
+            		model.putCondition(criterion.getColumn(), criterion.getValue());
+            		conditionStr = buildListParamSql(FieldSqlGenerator.CONDITION_PREFIX, criterion.getColumn(), model, "not in");
+            	}
             }else if(Condition.BETWEEN == criterion.getCondition()){
                 conditionStr = buildBetweenParamSql(FieldSqlGenerator.CONDITION_PREFIX, criterion.getColumn(), model, "between");
                 model.putCondition(criterion.getColumn()+"Value", criterion.getValue());
@@ -120,7 +147,7 @@ public abstract class AbstractTemplate {
                 model.putCondition(criterion.getColumn()+"SecondValue", criterion.getSecondValue());
             }else if(Condition.LIKE == criterion.getCondition()){
                 conditionStr = buildSingleParamSql(FieldSqlGenerator.CONDITION_PREFIX, criterion.getColumn(), model, "like");
-                model.putCondition(criterion.getColumn(), criterion.getValue()+"%");
+                model.putCondition(criterion.getColumn(), "%"+criterion.getValue()+"%");
             }else if(Condition.NOT_LIKE == criterion.getCondition()){
                 conditionStr = buildSingleParamSql(FieldSqlGenerator.CONDITION_PREFIX, criterion.getColumn(), model, "not like");
                 model.putCondition(criterion.getColumn(), criterion.getValue());
@@ -148,20 +175,28 @@ public abstract class AbstractTemplate {
     public String deleteByCriteria(Table model) {
         model.resetQueryConditions();
         SQL sql = new SQL();
-        sql.DELETE_FROM(model.getTableName());
+        sql.DELETE_FROM(ColumnWrapperUtils.wrap(model.getTableName()));
         QueryCriteria queryCriteria = model.getQueryCriteria();
+        String indexName = null;
         if(queryCriteria.getOredCriteria() != null && queryCriteria.getOredCriteria().size() > 0){
-            caculationQueryCriteria(sql, model);
+        	indexName = caculationQueryCriteria(sql, model);
         }
         model.resetQueryCriteria();
         LOG.debug(sql.toString());
+        if(LOG.isDebugEnabled()){
+        	if(StringUtils.isNotEmpty(indexName)){
+        		LOG.debug("命中索引："+indexName+model.getContent().getIndexs().get(indexName));
+        	}else{
+        		LOG.debug("命中索引：无");
+        	}
+        }
         return sql.toString();  
     }
     
     
     public String deleteByPrimaryKey(Table model){
         SQL sql = new SQL();
-        sql.DELETE_FROM(model.getTableName());
+        sql.DELETE_FROM(ColumnWrapperUtils.wrap(model.getTableName()));
         caculationPrimaryKey(sql, model);
         LOG.debug(sql.toString());
         return sql.toString(); 
@@ -172,14 +207,14 @@ public abstract class AbstractTemplate {
     //--------------------------------------
     public String insert(Table model) {
         SQL sql = new SQL();
-        sql.INSERT_INTO(model.getTableName());
+        sql.INSERT_INTO(ColumnWrapperUtils.wrap(model.getTableName()));
         LinkedHashMap<String, Object> params = model.getParams();
         if(params != null){
         	Iterator<Entry<String, Object>> iterator = params.entrySet().iterator();
             while(iterator.hasNext()){
                 Entry<String, Object> entry = iterator.next();
                 String key = entry.getKey();
-                if(model.getContent().getFields().containsKey(key)){
+                if(model.getContent().getFields().containsKey(key.toLowerCase())){
                 	if (entry.getValue() != null && StringUtils.isNotBlank(entry.getValue().toString()) ) {
                     	sql.VALUES(ColumnWrapperUtils.wrap(key), buildSingleParamSql(FieldSqlGenerator.PARAM_PREFIX, key, model, null));
     				}
@@ -198,7 +233,7 @@ public abstract class AbstractTemplate {
         model.resetQueryConditions();
         QueryCriteria queryCriteria = model.getQueryCriteria();
         String customFields = caculationCustomField(model);
-        if(queryCriteria.isDistinct()){
+        if(queryCriteria.getDistinct()){
             if(StringUtils.isNotEmpty(customFields)){
                 sql.SELECT_DISTINCT(customFields);
             }else{
@@ -211,9 +246,10 @@ public abstract class AbstractTemplate {
                 sql.SELECT(model.caculationAllColumn());
             }
         }
-        sql.FROM(model.getTableName());
+        sql.FROM(ColumnWrapperUtils.wrap(model.getTableName()));
+        String indexName = null;
         if(queryCriteria.getOredCriteria() != null && queryCriteria.getOredCriteria().size() > 0){
-            caculationQueryCriteria(sql, model);
+        	indexName = caculationQueryCriteria(sql, model);
         }
         if(StringUtils.isNotEmpty(queryCriteria.getOrderByClause())){
             sql.ORDER_BY(queryCriteria.getOrderByClause());
@@ -223,24 +259,52 @@ public abstract class AbstractTemplate {
 		}
         if(queryCriteria.getSelectOne()){
         	LOG.debug(sql.toString()+" limit 0,1");
+        	if(LOG.isDebugEnabled()){
+            	if(StringUtils.isNotEmpty(indexName)){
+            		LOG.debug("命中索引："+indexName+model.getContent().getIndexs().get(indexName));
+            	}else{
+            		LOG.debug("命中索引：无");
+            	}
+            }
             return sql.toString()+" limit 0,1";
         }
-        if(queryCriteria.getPageIndex() > 0 && queryCriteria.getPageSize() > 0){
-            int start = (queryCriteria.getPageIndex() - 1) * queryCriteria.getPageSize();
-            LOG.debug(sql.toString()+" limit " + start + "," + queryCriteria.getPageSize());
-            return sql.toString()+" limit " + start + "," + queryCriteria.getPageSize();
-        }else{
-        	if(queryCriteria.getRecordIndex() > 0 && queryCriteria.getPageSize() > 0){
-        		LOG.debug(sql.toString()+" limit " + queryCriteria.getRecordIndex() + "," + queryCriteria.getPageSize());
-        		return sql.toString()+" limit " + queryCriteria.getRecordIndex() + "," + queryCriteria.getPageSize();
-        	}
-        }
+        
+    	if(queryCriteria.getLimit() > 0){
+    		LOG.debug(sql.toString()+" limit " + queryCriteria.getRecordIndex() + "," + queryCriteria.getLimit());
+    		if(LOG.isDebugEnabled()){
+            	if(StringUtils.isNotEmpty(indexName)){
+            		LOG.debug("命中索引："+indexName+model.getContent().getIndexs().get(indexName));
+            	}else{
+            		LOG.debug("命中索引：无");
+            	}
+            }
+    		return sql.toString()+" limit " + queryCriteria.getRecordIndex() + "," + queryCriteria.getLimit();
+    	}else{
+    		if(queryCriteria.getPageIndex() > 0 && queryCriteria.getPageSize() > 0){
+                int start = (queryCriteria.getPageIndex() - 1) * queryCriteria.getPageSize();
+                LOG.debug(sql.toString()+" limit " + start + "," + queryCriteria.getPageSize());
+                if(LOG.isDebugEnabled()){
+                	if(StringUtils.isNotEmpty(indexName)){
+                		LOG.debug("命中索引："+indexName+model.getContent().getIndexs().get(indexName));
+                	}else{
+                		LOG.debug("命中索引：无");
+                	}
+                }
+                return sql.toString()+" limit " + start + "," + queryCriteria.getPageSize();
+            }
+    	}
         model.resetQueryCriteria();
         model.resetQueryParams();
         LOG.debug(sql.toString());
+        if(LOG.isDebugEnabled()){
+        	if(StringUtils.isNotEmpty(indexName)){
+        		LOG.debug("命中索引："+indexName+model.getContent().getIndexs().get(indexName));
+        	}else{
+        		LOG.debug("命中索引：无");
+        	}
+        }
         return sql.toString();  
     }
-
 
     /**
      * 计算自定义定段，
@@ -279,7 +343,7 @@ public abstract class AbstractTemplate {
         }else{
             sql.SELECT(model.caculationAllColumn());
         }
-        sql.FROM(model.getTableName());
+        sql.FROM(ColumnWrapperUtils.wrap(model.getTableName()));
         caculationPrimaryKey(sql, model);
         LOG.debug(sql.toString());
         return sql.toString();
@@ -289,13 +353,26 @@ public abstract class AbstractTemplate {
         SQL sql = new SQL();
         model.resetQueryConditions();
         QueryCriteria queryCriteria = model.getQueryCriteria();
-        sql.SELECT(" count(1) ");
-        sql.FROM(model.getTableName());
+        if(queryCriteria.getDistinct()){
+        	 String customFields = caculationCustomField(model);
+        	sql.SELECT(" count(distinct " + customFields + ") ");
+        }else{
+        	sql.SELECT(" count(1) ");
+        }
+        sql.FROM(ColumnWrapperUtils.wrap(model.getTableName()));
+        String indexName = null;
         if(queryCriteria.getOredCriteria() != null && queryCriteria.getOredCriteria().size() > 0){
-            caculationQueryCriteria(sql, model);
+        	indexName = caculationQueryCriteria(sql, model);
         }
         model.resetQueryCriteria();
         LOG.debug(sql.toString());
+        if(LOG.isDebugEnabled()){
+        	if(StringUtils.isNotEmpty(indexName)){
+        		LOG.debug("命中索引："+indexName+model.getContent().getIndexs().get(indexName));
+        	}else{
+        		LOG.debug("命中索引：无");
+        	}
+        }
         return sql.toString();  
     }
     
@@ -305,18 +382,23 @@ public abstract class AbstractTemplate {
     public String updateByCriteria(Table model) {
         model.resetQueryConditions();
         SQL sql = new SQL();
-        sql.UPDATE(model.getTableName());
+        sql.UPDATE(ColumnWrapperUtils.wrap(model.getTableName()));
         LinkedHashMap<String, Object> params = model.getParams();
         if(params != null){
             Iterator<String> iter = params.keySet().iterator();
             while(iter.hasNext()){
                 String key = iter.next();
-                if(!model.getPrimaryKey().getFields().contains(key)){
+                if(!model.getPrimaryKey().getFields().contains(key.toLowerCase())){
                 	if(null == params.get(key)){
                 		sql.SET(key + " = null");
                 	}else{
-                		
-                		sql.SET(buildSingleParamSql(FieldSqlGenerator.PARAM_PREFIX, key, model, "="));
+                		String vstr = String.valueOf(params.get(key)).trim();
+                		if(vstr.startsWith("=")){
+                			sql.SET(ColumnWrapperUtils.wrap(key) + params.get(key));
+                			params.remove(key);
+                		}else{
+                			sql.SET(buildSingleParamSql(FieldSqlGenerator.PARAM_PREFIX, key, model, "="));
+                		}
                 	}
                 }
             }
@@ -325,33 +407,43 @@ public abstract class AbstractTemplate {
         	sql.SET(VersionWrapperUtils.wrapSetSql(model.getVersion()));
         }
         QueryCriteria queryCriteria = model.getQueryCriteria();
+        String indexName = null;
         if(queryCriteria.getOredCriteria() != null && queryCriteria.getOredCriteria().size() > 0){
-            caculationQueryCriteria(sql, model);
+        	indexName = caculationQueryCriteria(sql, model);
         }
         if(model.hasVersion()){
         	Object value = queryCriteria.getVersion();
         	if(null == value){
-        		throw new StaleObjectStateException("Version is request.");
+        		throw new DalSqlException("Version is request.");
         	}
         	sql.AND();
         	sql.WHERE(VersionWrapperUtils.wrapWhereSql(model.getVersion(), value));
         }
         model.resetQueryCriteria();
         LOG.debug(sql.toString());
+        if(LOG.isDebugEnabled()){
+        	if(StringUtils.isNotEmpty(indexName)){
+        		LOG.debug("命中索引："+indexName+model.getContent().getIndexs().get(indexName));
+        	}else{
+        		LOG.debug("命中索引：无");
+        	}
+        }
         return sql.toString();  
     }
     
     
     public String updateByPrimaryKey(Table model){
         SQL sql = new SQL();
-        sql.UPDATE(model.getTableName());
+        sql.UPDATE(ColumnWrapperUtils.wrap(model.getTableName()));
         LinkedHashMap<String, Object> params = model.getParams();
-        if(params != null){
-            Iterator<String> iter = params.keySet().iterator();
+        Map<String, Object> mapParams = new LinkedHashMap<String, Object>();
+        mapParams.putAll(params);
+        if(mapParams != null){
+            Iterator<String> iter = mapParams.keySet().iterator();
             while(iter.hasNext()){
                 String key = iter.next();
-                if(!model.getPrimaryKey().getFields().contains(key)){
-                	Object value = params.get(key);
+                if(!model.getPrimaryKey().getFields().contains(key.toLowerCase())){
+                	Object value = mapParams.get(key);
                 	if(null == value){
                 		sql.SET(key + " = null");
                 	}else{
@@ -373,7 +465,7 @@ public abstract class AbstractTemplate {
         if(model.hasVersion()){
         	Object value = model.getConditions().get(model.getVersion().getFieldName());
         	if(null == value){
-        		throw new StaleObjectStateException("Version is request.");
+        		throw new DalSqlException("Version is request.");
         	}
         	sql.AND();
         	sql.WHERE(VersionWrapperUtils.wrapWhereSql(model.getVersion(), value));
